@@ -1,7 +1,7 @@
 import type { Vehicle } from "@/types/database";
 
 export type ExportFormat = "pdf" | "xlsx" | "docx";
-export type ExportTab = "pending" | "passed" | "failed";
+export type ExportTab = "pending" | "passed";
 
 export interface ExportColumn {
   header: string;
@@ -12,8 +12,7 @@ export interface ExportColumn {
 
 export const TAB_TITLES: Record<ExportTab, string> = {
   pending: "Pending Inspection Queue",
-  passed: "Passed Vehicles",
-  failed: "Failed Vehicles",
+  passed: "Verified / Passed Vehicles",
 };
 
 export const authorityName = () =>
@@ -40,36 +39,25 @@ export const safeName = (s: string): string =>
 
 export function exportColumns(tab: ExportTab): ExportColumn[] {
   const base: ExportColumn[] = [
-    { header: "Number Plate", width: 18, get: (v) => v.registration_no },
-    { header: "Chassis No", width: 22, get: (v) => v.chassis_no },
-    { header: "Engine No", width: 22, get: (v) => v.engine_no },
+    { header: "S.No", width: 8, get: (v) => String(v.id) },
+    { header: "Vehicle No", width: 18, get: (v) => v.registration_no },
+    { header: "Document (Original Submitted)", width: 18, get: (v) => v.document_status },
+    { header: "Date of Entry", width: 15, get: (v) => fmtDate(v.date_of_entry) },
+    { header: "District", width: 18, get: (v) => v.district ?? "" },
+    { header: "Traffic Station", width: 22, get: (v) => v.traffic_station ?? "" },
+    { header: "Name (Collected By)", width: 22, get: (v) => v.collected_by_or_operator_name },
   ];
-  if (tab === "pending") {
-    return [
-      ...base,
-      { header: "Documents", width: 14, get: (v) => v.documents_status },
-      { header: "Entered", width: 14, get: (v) => fmtDate(v.created_at) },
-    ];
-  }
-  if (tab === "passed") {
-    return [
-      ...base,
-      { header: "Certificate No", width: 20, get: (v) => v.certificate_no ?? "" },
-      { header: "Inspector", width: 22, get: (v) => v.inspector_name ?? "" },
-      { header: "Inspection Date", width: 16, get: (v) => fmtDate(v.inspected_at) },
-      { header: "Remarks", width: 36, get: (v) => v.remarks ?? "" },
-    ];
-  }
+  if (tab === "pending") return base;
   return [
     ...base,
-    { header: "Failure Reason", width: 40, get: (v) => v.remarks ?? "" },
-    { header: "Inspector", width: 22, get: (v) => v.inspector_name ?? "" },
-    { header: "Inspection Date", width: 16, get: (v) => fmtDate(v.inspected_at) },
+    { header: "Certificate No", width: 20, get: (v) => v.certificate_no ?? "" },
+    { header: "Verified By", width: 22, get: (v) => v.verified_by_name ?? "" },
+    { header: "Verified On", width: 15, get: (v) => fmtDate(v.verified_at) },
   ];
 }
 
 export function certificateDates(v: Vehicle): { issued: Date; expiry: Date } {
-  const issued = new Date(v.inspected_at ?? v.created_at);
+  const issued = new Date(v.verified_at ?? v.created_at);
   const expiry = new Date(issued);
   expiry.setMonth(expiry.getMonth() + validityMonths());
   return { issued, expiry };
@@ -79,27 +67,30 @@ export function certificateDates(v: Vehicle): { issued: Date; expiry: Date } {
 export function certificateRows(v: Vehicle): [string, string][] {
   const { issued, expiry } = certificateDates(v);
   return [
-    ["Registration / Number Plate", v.registration_no],
-    ["Chassis Number", v.chassis_no],
-    ["Engine Number", v.engine_no],
-    ["Documents", v.documents_status],
-    ["Date of Inspection", fmtLong(issued)],
+    ["Vehicle No", v.registration_no],
+    ["Original Documents Submitted", v.document_status],
+    ["Date of Entry", fmtDate(v.date_of_entry)],
+    ["District", v.district ?? "—"],
+    ["Traffic Station", v.traffic_station ?? "—"],
+    ["Collected By", v.collected_by_or_operator_name || "—"],
+    ["Date of Verification", fmtLong(issued)],
     ["Valid Until", fmtLong(expiry)],
   ];
 }
 
-/** Key/value rows for a single non-certificate record (pending / failed). */
+/** Key/value rows for a single pending record. */
 export function recordRows(v: Vehicle): [string, string][] {
   const rows: [string, string][] = [
-    ["Number Plate", v.registration_no],
-    ["Chassis No", v.chassis_no],
-    ["Engine No", v.engine_no],
-    ["Documents", v.documents_status],
+    ["S.No", String(v.id)],
+    ["Vehicle No", v.registration_no],
+    ["Document (Original Submitted)", v.document_status],
+    ["Date of Entry", fmtDate(v.date_of_entry)],
+    ["District", v.district ?? ""],
+    ["Traffic Station", v.traffic_station ?? ""],
+    ["Name (Collected By)", v.collected_by_or_operator_name],
     ["Status", v.status.toUpperCase()],
-    ["Entered", fmtDate(v.created_at)],
   ];
-  if (v.inspector_name) rows.push(["Inspector", v.inspector_name]);
-  if (v.inspected_at) rows.push(["Inspection Date", fmtDate(v.inspected_at)]);
-  if (v.remarks) rows.push([v.status === "failed" ? "Failure Reason" : "Remarks", v.remarks]);
+  if (v.verified_by_name) rows.push(["Verified By", v.verified_by_name]);
+  if (v.verified_at) rows.push(["Verified On", fmtDate(v.verified_at)]);
   return rows;
 }

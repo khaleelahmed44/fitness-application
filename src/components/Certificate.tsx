@@ -9,16 +9,18 @@ export default function Certificate({ vehicle }: { vehicle: Vehicle }) {
   const subtitle = process.env.NEXT_PUBLIC_AUTHORITY_SUBTITLE ?? "";
   const months = Number(process.env.NEXT_PUBLIC_CERT_VALIDITY_MONTHS ?? "12");
 
-  const issued = new Date(vehicle.inspected_at ?? vehicle.created_at);
+  const issued = new Date(vehicle.verified_at ?? vehicle.created_at);
   const expiry = new Date(issued);
   expiry.setMonth(expiry.getMonth() + months);
 
   const rows: [string, string][] = [
-    ["Registration / Number Plate", vehicle.registration_no],
-    ["Chassis Number", vehicle.chassis_no],
-    ["Engine Number", vehicle.engine_no],
-    ["Documents", vehicle.documents_status],
-    ["Date of Inspection", fmt(issued)],
+    ["Vehicle No", vehicle.registration_no],
+    ["Original Documents Submitted", vehicle.document_status],
+    ["Date of Entry", fmt(new Date(`${vehicle.date_of_entry}T00:00:00`))],
+    ["District", vehicle.district ?? "—"],
+    ["Traffic Station", vehicle.traffic_station ?? "—"],
+    ["Collected By", vehicle.collected_by_or_operator_name || "—"],
+    ["Date of Verification", fmt(issued)],
     ["Valid Until", fmt(expiry)],
   ];
 
@@ -41,9 +43,9 @@ export default function Certificate({ vehicle }: { vehicle: Vehicle }) {
         </section>
 
         <p className="mt-10 text-center text-base leading-relaxed text-gray-800">
-          This is to certify that the vehicle described below has been inspected and found
+          This is to certify that the vehicle described below has been verified and found
           <strong> FIT </strong>
-          for road use as of the date of inspection.
+          for road use as of the date of verification.
         </p>
 
         <table className="mt-8 w-full border-collapse text-base">
@@ -61,19 +63,13 @@ export default function Certificate({ vehicle }: { vehicle: Vehicle }) {
           </tbody>
         </table>
 
-        {vehicle.remarks && (
-          <p className="mt-4 text-sm text-gray-700">
-            <span className="font-semibold">Remarks:</span> {vehicle.remarks}
-          </p>
-        )}
-
         <div className="mt-auto grid grid-cols-2 items-end gap-10 pt-16">
           <div>
             <div className="border-b border-gray-700 pb-1 text-lg">
-              {vehicle.inspector_name ?? "—"}
+              {vehicle.verified_by_name ?? "—"}
             </div>
             <p className="mt-1 text-xs uppercase tracking-wide text-gray-600">
-              Inspecting Officer
+              Verifying Officer
             </p>
           </div>
           <div className="text-right text-xs text-gray-500">

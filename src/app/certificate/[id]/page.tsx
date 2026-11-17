@@ -14,7 +14,7 @@ export default async function CertificatePage({
   const { id } = await params;
   const supabase = await createClient();
 
-  // RLS: only inspectors/admins can read passed rows, so operators get nothing here.
+  // RLS: only signed-in users can read; the middleware redirects everyone else to /login.
   const { data: vehicle } = await supabase
     .from("vehicles")
     .select("*")

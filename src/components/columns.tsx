@@ -1,15 +1,17 @@
 import { createColumnHelper, type ColumnDef } from "@tanstack/react-table";
-import type { DocumentsStatus, Vehicle } from "@/types/database";
+import { BadgeCheck, Download, FileText, Pencil, Trash2 } from "lucide-react";
+import type { DocumentStatus, Vehicle } from "@/types/database";
 import type { ExportFormat } from "@/lib/export";
 
-export type TabKey = "pending" | "passed" | "failed";
+export type TabKey = "pending" | "passed";
 
 interface Options {
-  canInspect: boolean;
-  busyId: string | null;
-  onPass: (v: Vehicle) => void;
-  onFail: (v: Vehicle) => void;
-  onDocsChange: (v: Vehicle, s: DocumentsStatus) => void;
+  canVerify: boolean;
+  canModify: (v: Vehicle) => boolean;
+  busyId: number | null;
+  onVerify: (v: Vehicle) => void;
+  onEdit: (v: Vehicle) => void;
+  onDelete: (v: Vehicle) => void;
   onExport: (v: Vehicle, format: ExportFormat) => void;
 }
 
@@ -17,166 +19,142 @@ const h = createColumnHelper<Vehicle>();
 
 const fmtDate = (iso: string | null) =>
   iso
-    ? new Date(iso).toLocaleDateString("en-GB", {
+    ? new Date(iso.length === 10 ? `${iso}T00:00:00` : iso).toLocaleDateString("en-GB", {
         day: "2-digit",
         month: "short",
         year: "numeric",
       })
     : "—";
 
-const DocsBadge = ({ value }: { value: DocumentsStatus }) => (
+const DocBadge = ({ value }: { value: DocumentStatus }) => (
   <span
-    className={`rounded px-2 py-0.5 text-xs font-medium ${
-      value === "Verified" ? "bg-green-100 text-green-800" : "bg-amber-100 text-amber-800"
+    className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${
+      value === "Yes" ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"
     }`}
   >
     {value}
   </span>
 );
 
+const dash = (v: string | null) => v || <span className="text-slate-300">—</span>;
+
+const iconBtn =
+  "rounded-lg p-1.5 text-slate-500 transition hover:bg-slate-100 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-30";
+
 export function buildColumns(tab: TabKey, o: Options): ColumnDef<Vehicle, any>[] {
-  const base: ColumnDef<Vehicle, any>[] = [
-    h.accessor("registration_no", {
-      header: "Number Plate",
-      cell: (c) => <span className="font-semibold">{c.getValue()}</span>,
+  const cols: ColumnDef<Vehicle, any>[] = [
+    h.accessor("id", {
+      header: "S.No",
+      cell: (c) => <span className="tabular-nums text-slate-500">{c.getValue()}</span>,
     }),
-    h.accessor("chassis_no", { header: "Chassis No" }),
-    h.accessor("engine_no", { header: "Engine No" }),
+    h.accessor("registration_no", {
+      header: "Vehicle No",
+      cell: (c) => <span className="font-semibold text-slate-900">{c.getValue()}</span>,
+    }),
+    h.accessor("document_status", {
+      header: "Document",
+      cell: (c) => <DocBadge value={c.getValue()} />,
+    }),
+    h.accessor("date_of_entry", { header: "Date of Entry", cell: (c) => fmtDate(c.getValue()) }),
+    h.accessor("district", { header: "District", cell: (c) => dash(c.getValue()) }),
+    h.accessor("traffic_station", { header: "Traffic Station", cell: (c) => dash(c.getValue()) }),
+    h.accessor("collected_by_or_operator_name", {
+      header: "Name",
+      cell: (c) => dash(c.getValue()),
+    }),
   ];
-
-  const exportCol = h.display({
-    id: "export",
-    header: "Download",
-    enableSorting: false,
-    cell: (c) => {
-      const v = c.row.original;
-      const isCert = v.status === "passed";
-      const btn =
-        "rounded border border-gray-300 px-2 py-0.5 text-xs font-medium text-gray-700 hover:bg-gray-100";
-      return (
-        <div className="flex gap-1">
-          <button
-            className={btn}
-            title={isCert ? "Download e-certificate (PDF)" : "Download record (PDF)"}
-            onClick={() => o.onExport(v, "pdf")}
-          >
-            PDF
-          </button>
-          <button className={btn} title="Download as Excel" onClick={() => o.onExport(v, "xlsx")}>
-            XLSX
-          </button>
-          <button
-            className={btn}
-            title={isCert ? "Download e-certificate (Word)" : "Download record (Word)"}
-            onClick={() => o.onExport(v, "docx")}
-          >
-            DOCX
-          </button>
-        </div>
-      );
-    },
-  });
-
-  if (tab === "pending") {
-    return [
-      ...base,
-      h.accessor("documents_status", {
-        header: "Documents",
-        cell: (c) =>
-          o.canInspect ? (
-            // Inline, spreadsheet-style editable cell for inspectors
-            <select
-              value={c.getValue()}
-              disabled={o.busyId === c.row.original.id}
-              onChange={(e) => o.onDocsChange(c.row.original, e.target.value as DocumentsStatus)}
-              className="w-full rounded border border-transparent bg-transparent px-1 py-0.5 text-sm hover:border-gray-300 focus:border-blue-500"
-            >
-              <option value="Pending">Pending</option>
-              <option value="Verified">Verified</option>
-            </select>
-          ) : (
-            <DocsBadge value={c.getValue()} />
-          ),
-      }),
-      h.accessor("created_at", { header: "Entered", cell: (c) => fmtDate(c.getValue()) }),
-      ...(o.canInspect
-        ? [
-            h.display({
-              id: "actions",
-              header: "Action",
-              enableSorting: false,
-              cell: (c) => {
-                const v = c.row.original;
-                const busy = o.busyId === v.id;
-                return (
-                  <div className="flex gap-2">
-                    <button
-                      disabled={busy || v.documents_status !== "Verified"}
-                      title={
-                        v.documents_status !== "Verified"
-                          ? "Documents must be Verified before passing"
-                          : "Pass and issue certificate"
-                      }
-                      onClick={() => o.onPass(v)}
-                      className="rounded bg-green-600 px-3 py-1 text-xs font-medium text-white hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-40"
-                    >
-                      Pass
-                    </button>
-                    <button
-                      disabled={busy}
-                      onClick={() => o.onFail(v)}
-                      className="rounded bg-red-600 px-3 py-1 text-xs font-medium text-white hover:bg-red-700 disabled:opacity-40"
-                    >
-                      Fail
-                    </button>
-                  </div>
-                );
-              },
-            }),
-          ]
-        : []),
-      exportCol,
-    ];
-  }
 
   if (tab === "passed") {
-    return [
-      ...base,
+    cols.push(
       h.accessor("certificate_no", {
         header: "Certificate No",
-        cell: (c) => <span className="font-mono">{c.getValue() ?? "—"}</span>,
+        cell: (c) => <span className="font-mono text-xs text-indigo-700">{c.getValue() ?? "—"}</span>,
       }),
-      h.accessor("inspector_name", { header: "Inspector", cell: (c) => c.getValue() ?? "—" }),
-      h.accessor("inspected_at", { header: "Date", cell: (c) => fmtDate(c.getValue()) }),
-      h.accessor("remarks", { header: "Remarks", cell: (c) => c.getValue() ?? "—" }),
-      h.display({
-        id: "certificate",
-        header: "Certificate",
-        enableSorting: false,
-        cell: (c) => (
-          <a
-            href={`/certificate/${c.row.original.id}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="rounded border border-blue-600 px-3 py-1 text-xs font-medium text-blue-700 hover:bg-blue-50"
-          >
-            Print / View Certificate
-          </a>
-        ),
-      }),
-      exportCol,
-    ];
+      h.accessor("verified_by_name", { header: "Verified By", cell: (c) => dash(c.getValue()) }),
+      h.accessor("verified_at", { header: "Verified On", cell: (c) => fmtDate(c.getValue()) })
+    );
   }
 
-  // failed
-  return [
-    ...base,
-    h.accessor("remarks", {
-      header: "Failure Reason",
-      cell: (c) => <span className="whitespace-pre-wrap text-red-700">{c.getValue() ?? "—"}</span>,
+  cols.push(
+    h.display({
+      id: "actions",
+      header: "Actions",
+      enableSorting: false,
+      cell: (c) => {
+        const v = c.row.original;
+        const busy = o.busyId === v.id;
+        const editable = o.canModify(v);
+        return (
+          <div className="flex items-center gap-1">
+            {tab === "pending" && o.canVerify && (
+              <button
+                disabled={busy || v.document_status !== "Yes"}
+                title={
+                  v.document_status !== "Yes"
+                    ? "Original documents must be submitted (Yes) before verifying"
+                    : "Verify and issue certificate"
+                }
+                onClick={() => o.onVerify(v)}
+                className="mr-1 inline-flex items-center gap-1 rounded-lg bg-emerald-600 px-2.5 py-1 text-xs font-semibold text-white shadow-sm transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-35"
+              >
+                <BadgeCheck className="h-3.5 w-3.5" />
+                Verify
+              </button>
+            )}
+            {tab === "passed" && (
+              <a
+                href={`/certificate/${v.id}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mr-1 inline-flex items-center gap-1 rounded-lg border border-indigo-200 bg-indigo-50 px-2.5 py-1 text-xs font-semibold text-indigo-700 hover:bg-indigo-100"
+              >
+                <FileText className="h-3.5 w-3.5" />
+                Certificate
+              </a>
+            )}
+            {editable && (
+              <>
+                <button className={iconBtn} title="Edit" onClick={() => o.onEdit(v)}>
+                  <Pencil className="h-4 w-4" />
+                </button>
+                <button
+                  className={`${iconBtn} hover:!bg-rose-50 hover:!text-rose-600`}
+                  title="Delete"
+                  onClick={() => o.onDelete(v)}
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              </>
+            )}
+          </div>
+        );
+      },
     }),
-    h.accessor("inspector_name", { header: "Inspector", cell: (c) => c.getValue() ?? "—" }),
-    h.accessor("inspected_at", { header: "Date", cell: (c) => fmtDate(c.getValue()) }),
-    exportCol,
-  ];
+    h.display({
+      id: "download",
+      header: "Download",
+      enableSorting: false,
+      cell: (c) => {
+        const v = c.row.original;
+        const btn =
+          "rounded-md border border-slate-200 px-1.5 py-0.5 text-[10px] font-bold tracking-wide text-slate-600 transition hover:border-indigo-300 hover:bg-indigo-50 hover:text-indigo-700";
+        return (
+          <div className="flex items-center gap-1">
+            <Download className="h-3.5 w-3.5 text-slate-300" />
+            <button className={btn} onClick={() => o.onExport(v, "pdf")} title="PDF">
+              PDF
+            </button>
+            <button className={btn} onClick={() => o.onExport(v, "xlsx")} title="Excel">
+              XLSX
+            </button>
+            <button className={btn} onClick={() => o.onExport(v, "docx")} title="Word">
+              DOCX
+            </button>
+          </div>
+        );
+      },
+    })
+  );
+
+  return cols;
 }

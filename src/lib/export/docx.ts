@@ -149,19 +149,16 @@ export async function exportCertificateDocx(v: Vehicle, filename: string): Promi
           centered("CERTIFICATE NO.", { size: 18, color: "666666" }),
           centered(v.certificate_no ?? "", { size: 44, bold: true, color: NAVY, after: 300 }),
           centered(
-            "This is to certify that the vehicle described below has been inspected and found FIT for road use as of the date of inspection.",
+            "This is to certify that the vehicle described below has been verified and found FIT for road use as of the date of inspection.",
             { size: 22, after: 300 }
           ),
           keyValueTable(certificateRows(v)),
-          ...(v.remarks
-            ? [new Paragraph({ spacing: { before: 200 }, children: [new TextRun({ text: `Remarks: ${v.remarks}`, size: 20 })] })]
-            : []),
           new Paragraph({
             spacing: { before: 900 },
-            children: [new TextRun({ text: v.inspector_name ?? "", size: 26 })],
+            children: [new TextRun({ text: v.verified_by_name ?? "", size: 26 })],
           }),
           new Paragraph({
-            children: [new TextRun({ text: "INSPECTING OFFICER", size: 16, color: "666666" })],
+            children: [new TextRun({ text: "VERIFYING OFFICER", size: 16, color: "666666" })],
           }),
           new Paragraph({
             spacing: { before: 200 },
@@ -185,7 +182,7 @@ export async function exportCertificateDocx(v: Vehicle, filename: string): Promi
   await save(doc, filename);
 }
 
-/** Single-record sheet for pending / failed vehicles. */
+/** Single-record sheet for a pending vehicle. */
 export async function exportRecordDocx(v: Vehicle, filename: string): Promise<void> {
   const doc = new Document({
     creator: authorityName(),

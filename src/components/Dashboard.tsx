@@ -1,29 +1,38 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { AnimatePresence, motion } from "framer-motion";
+import {
+  BadgeCheck,
+  CalendarPlus,
+  ClipboardList,
+  FileUp,
+  LogOut,
+  Menu,
+  Plus,
+  ShieldCheck,
+  Truck,
+  X,
+} from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import {
-  ActionError,
   addVehicle,
+  deleteVehicle,
   importVehicles,
-  inspectVehicle,
-  setDocumentsStatus,
+  updateVehicle,
+  verifyVehicle,
   type ImportRow,
 } from "@/lib/vehicle-actions";
 import { exportList, exportRecord, type ExportFormat } from "@/lib/export";
-import {
-  canInspect as hasInspectorRights,
-  type DocumentsStatus,
-  type NewVehicleInput,
-  type Profile,
-  type Vehicle,
-} from "@/types/database";
+import { suggestionsFor, type SuggestField } from "@/lib/suggestions";
+import { canModify, canVerify, type Profile, type Vehicle, type VehicleInput } from "@/types/database";
 import VehicleGrid from "./VehicleGrid";
-import NewEntryModal from "./NewEntryModal";
-import InspectModal from "./InspectModal";
+import EntryModal from "./EntryModal";
 import ImportModal from "./ImportModal";
+import ConfirmModal from "./ConfirmModal";
 import ExportMenu from "./ExportMenu";
+import AnimatedNumber from "./AnimatedNumber";
 import { buildColumns, type TabKey } from "./columns";
 
 interface Props {
@@ -32,59 +41,119 @@ interface Props {
 }
 
 const TAB_LABELS: Record<TabKey, string> = {
-  pending: "Pending Inspection",
-  passed: "Passed Vehicles",
-  failed: "Failed Vehicles",
+  pending: "Pending Queue",
+  passed: "Verified / Passed",
 };
 
 const EMPTY_TEXT: Record<TabKey, string> = {
-  pending: "No vehicles waiting for inspection.",
-  passed: "No vehicles have passed yet.",
-  failed: "No vehicles have failed.",
+  pending: "No vehicles are waiting. Add a new entry to get started.",
+  passed: "No vehicles have been verified yet.",
 };
+
+type Dialog =
+  | { kind: "new" }
+  | { kind: "edit"; vehicle: Vehicle }
+  | { kind: "delete"; vehicle: Vehicle }
+  | { kind: "verify"; vehicle: Vehicle }
+  | { kind: "import" }
+  | null;
+
+const todayIso = () =>
+  new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Karachi" });
 
 export default function Dashboard({ profile, initialVehicles }: Props) {
   const router = useRouter();
   const supabase = useMemo(() => createClient(), []);
-  const inspector = hasInspectorRights(profile.role);
+  const verifier = canVerify(profile.role);
+  const displayName = profile.full_name || profile.email || "User";
 
   const [vehicles, setVehicles] = useState<Vehicle[]>(initialVehicles);
   const [tab, setTab] = useState<TabKey>("pending");
-  const [showNew, setShowNew] = useState(false);
-  const [showImport, setShowImport] = useState(false);
+  const [dialog, setDialog] = useState<Dialog>(null);
   const [search, setSearch] = useState("");
-  const [inspecting, setInspecting] = useState<{
-    vehicle: Vehicle;
-    decision: "passed" | "failed";
-  } | null>(null);
-  const [busyId, setBusyId] = useState<string | null>(null);
+  const [drawer, setDrawer] = useState(false);
+  const [busyId, setBusyId] = useState<number | null>(null);
   const [toast, setToast] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
+  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const flash = useCallback((kind: "ok" | "err", text: string) => {
     setToast({ kind, text });
-    setTimeout(() => setToast(null), 4000);
+    if (toastTimer.current) clearTimeout(toastTimer.current);
+    toastTimer.current = setTimeout(() => setToast(null), 4500);
   }, []);
 
   const refresh = useCallback(async () => {
     const { data, error } = await supabase
       .from("vehicles")
       .select("*")
-      .order("created_at", { ascending: false });
+      .order("id", { ascending: false });
     if (error) flash("err", error.message);
     else setVehicles((data ?? []) as Vehicle[]);
   }, [supabase, flash]);
 
+  // Live updates: counters and lists follow changes made by anyone else.
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const channel = supabase
+      .channel("vehicles-live")
+      .on("postgres_changes", { event: "*", schema: "public", table: "vehicles" }, () => {
+        if (timer) clearTimeout(timer);
+        timer = setTimeout(() => void refresh(), 350);
+      })
+      .subscribe();
+    return () => {
+      if (timer) clearTimeout(timer);
+      void supabase.removeChannel(channel);
+    };
+  }, [supabase, refresh]);
+
   const upsertLocal = (v: Vehicle) =>
-    setVehicles((prev) => {
-      const exists = prev.some((p) => p.id === v.id);
-      return exists ? prev.map((p) => (p.id === v.id ? v : p)) : [v, ...prev];
-    });
+    setVehicles((prev) =>
+      prev.some((p) => p.id === v.id) ? prev.map((p) => (p.id === v.id ? v : p)) : [v, ...prev]
+    );
 
   // ---- handlers -------------------------------------------------------
-  const handleAdd = async (input: NewVehicleInput) => {
+  const handleAdd = async (input: VehicleInput) => {
     const created = await addVehicle(supabase, input);
     upsertLocal(created);
+    setTab("pending");
     flash("ok", `${created.registration_no} added to the pending queue.`);
+  };
+
+  const handleEdit = async (id: number, input: VehicleInput) => {
+    try {
+      upsertLocal(await updateVehicle(supabase, id, input));
+      flash("ok", "Entry updated.");
+    } catch (err) {
+      await refresh();
+      throw err;
+    }
+  };
+
+  const handleDelete = async (v: Vehicle) => {
+    try {
+      await deleteVehicle(supabase, v.id);
+      setVehicles((prev) => prev.filter((p) => p.id !== v.id));
+      flash("ok", `${v.registration_no} deleted.`);
+    } catch (err) {
+      await refresh();
+      throw err;
+    }
+  };
+
+  const handleVerify = async (v: Vehicle) => {
+    setBusyId(v.id);
+    try {
+      const updated = await verifyVehicle(supabase, v.id);
+      upsertLocal(updated);
+      setTab("passed");
+      flash("ok", `Verified. Certificate ${updated.certificate_no} issued.`);
+    } catch (err) {
+      await refresh();
+      throw err;
+    } finally {
+      setBusyId(null);
+    }
   };
 
   const handleImport = async (rows: ImportRow[]) => {
@@ -107,44 +176,9 @@ export default function Dashboard({ profile, initialVehicles }: Props) {
 
   const handleExportRecord = async (v: Vehicle, format: ExportFormat) => {
     try {
-      await exportRecord(format, tab, v);
+      await exportRecord(format, v.status, v);
     } catch (err) {
       flash("err", err instanceof Error ? err.message : "Export failed");
-    }
-  };
-
-  const handleDecision = async (remarks: string) => {
-    if (!inspecting) return;
-    const { vehicle, decision } = inspecting;
-    setBusyId(vehicle.id);
-    try {
-      const updated = await inspectVehicle(supabase, { id: vehicle.id, decision, remarks });
-      upsertLocal(updated);
-      flash(
-        "ok",
-        decision === "passed"
-          ? `Passed. Certificate ${updated.certificate_no} issued.`
-          : `${updated.registration_no} marked as failed.`
-      );
-      if (decision === "passed") setTab("passed");
-      else setTab("failed");
-    } catch (err) {
-      if (err instanceof ActionError) await refresh();
-      throw err; // modal shows the message
-    } finally {
-      setBusyId(null);
-    }
-  };
-
-  const handleDocs = async (v: Vehicle, s: DocumentsStatus) => {
-    setBusyId(v.id);
-    try {
-      upsertLocal(await setDocumentsStatus(supabase, v.id, s));
-    } catch (err) {
-      flash("err", err instanceof Error ? err.message : "Update failed");
-      await refresh();
-    } finally {
-      setBusyId(null);
     }
   };
 
@@ -155,148 +189,369 @@ export default function Dashboard({ profile, initialVehicles }: Props) {
   };
 
   // ---- derived data ---------------------------------------------------
-  const visibleTabs: TabKey[] = inspector ? ["pending", "passed", "failed"] : ["pending"];
-  const counts = useMemo(
-    () => ({
+  const counts = useMemo(() => {
+    const today = todayIso();
+    return {
+      total: vehicles.length,
       pending: vehicles.filter((v) => v.status === "pending").length,
       passed: vehicles.filter((v) => v.status === "passed").length,
-      failed: vehicles.filter((v) => v.status === "failed").length,
-    }),
-    [vehicles]
-  );
+      today: vehicles.filter((v) => v.date_of_entry === today).length,
+    };
+  }, [vehicles]);
+
   const rows = useMemo(() => {
     const q = search.trim().toLowerCase();
     return vehicles.filter(
       (v) =>
         v.status === tab &&
         (!q ||
-          [v.registration_no, v.chassis_no, v.engine_no, v.documents_status, v.certificate_no, v.inspector_name, v.remarks]
+          [
+            v.registration_no,
+            v.district,
+            v.traffic_station,
+            v.collected_by_or_operator_name,
+            v.certificate_no,
+            v.verified_by_name,
+            v.document_status,
+            String(v.id),
+          ]
             .filter(Boolean)
             .some((f) => String(f).toLowerCase().includes(q)))
     );
   }, [vehicles, tab, search]);
+
   const existingPlates = useMemo(
-    () =>
-      new Set(
-        vehicles.filter((v) => v.status === "pending").map((v) => v.registration_no.toUpperCase())
-      ),
+    () => new Set(vehicles.filter((v) => v.status === "pending").map((v) => v.registration_no.toUpperCase())),
     [vehicles]
   );
+
+  const suggest = useMemo(() => {
+    const fields: SuggestField[] = [
+      "registration_no",
+      "district",
+      "traffic_station",
+      "collected_by_or_operator_name",
+    ];
+    return Object.fromEntries(fields.map((f) => [f, suggestionsFor(vehicles, f)])) as Record<
+      SuggestField,
+      string[]
+    >;
+  }, [vehicles]);
+
   const columns = useMemo(
     () =>
       buildColumns(tab, {
-        canInspect: inspector,
+        canVerify: verifier,
+        canModify: (v) => canModify(v, profile.id, profile.role),
         busyId,
-        onPass: (v) => setInspecting({ vehicle: v, decision: "passed" }),
-        onFail: (v) => setInspecting({ vehicle: v, decision: "failed" }),
-        onDocsChange: handleDocs,
+        onVerify: (v) => setDialog({ kind: "verify", vehicle: v }),
+        onEdit: (v) => setDialog({ kind: "edit", vehicle: v }),
+        onDelete: (v) => setDialog({ kind: "delete", vehicle: v }),
         onExport: handleExportRecord,
       }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [tab, inspector, busyId]
+    [tab, verifier, busyId, profile.id, profile.role]
+  );
+
+  const stats = [
+    { label: "Total entries", value: counts.total, Icon: ClipboardList, tone: "from-indigo-500 to-violet-500" },
+    { label: "Pending", value: counts.pending, Icon: Truck, tone: "from-amber-400 to-orange-500" },
+    { label: "Verified / Passed", value: counts.passed, Icon: BadgeCheck, tone: "from-emerald-400 to-teal-500" },
+    { label: "Added today", value: counts.today, Icon: CalendarPlus, tone: "from-sky-400 to-blue-500" },
+  ];
+
+  const nav = (
+    <div className="flex h-full flex-col">
+      <div className="flex items-center gap-3 px-5 py-6">
+        <div className="grid h-10 w-10 place-items-center rounded-xl bg-gradient-to-br from-indigo-400 to-violet-500 shadow-lg shadow-indigo-900/40">
+          <ShieldCheck className="h-5 w-5 text-white" />
+        </div>
+        <div>
+          <p className="text-sm font-semibold leading-tight text-white">Fitness Register</p>
+          <p className="text-[11px] text-indigo-200/70">Vehicle e-certificates</p>
+        </div>
+      </div>
+
+      <nav className="flex-1 space-y-1 px-3" aria-label="Sections">
+        {(Object.keys(TAB_LABELS) as TabKey[]).map((t) => {
+          const active = tab === t;
+          return (
+            <button
+              key={t}
+              onClick={() => {
+                setTab(t);
+                setDrawer(false);
+              }}
+              className={`relative flex w-full items-center justify-between rounded-xl px-3.5 py-2.5 text-sm font-medium transition ${
+                active ? "text-white" : "text-indigo-100/70 hover:bg-white/5 hover:text-white"
+              }`}
+            >
+              {active && (
+                <motion.span
+                  layoutId="nav-active"
+                  className="absolute inset-0 rounded-xl bg-white/10 ring-1 ring-white/10"
+                  transition={{ type: "spring", stiffness: 400, damping: 32 }}
+                />
+              )}
+              <span className="relative flex items-center gap-2.5">
+                {t === "pending" ? <Truck className="h-4 w-4" /> : <BadgeCheck className="h-4 w-4" />}
+                {TAB_LABELS[t]}
+              </span>
+              <span className="relative rounded-full bg-white/10 px-2 py-0.5 text-xs">
+                {t === "pending" ? counts.pending : counts.passed}
+              </span>
+            </button>
+          );
+        })}
+
+        <div className="pt-4">
+          <button
+            onClick={() => {
+              setDialog({ kind: "new" });
+              setDrawer(false);
+            }}
+            className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-indigo-500 to-violet-500 px-3.5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-indigo-950/40 transition hover:brightness-110"
+          >
+            <Plus className="h-4 w-4" /> New Entry
+          </button>
+        </div>
+      </nav>
+
+      <div className="m-3 rounded-2xl bg-white/5 p-3.5 ring-1 ring-white/10">
+        <p className="truncate text-sm font-medium text-white">{displayName}</p>
+        <p className="mt-0.5 text-xs capitalize text-indigo-200/70">{profile.role}</p>
+        <button
+          onClick={signOut}
+          className="mt-3 flex w-full items-center justify-center gap-2 rounded-lg bg-white/10 py-2 text-xs font-medium text-white transition hover:bg-white/20"
+        >
+          <LogOut className="h-3.5 w-3.5" /> Sign out
+        </button>
+      </div>
+    </div>
   );
 
   return (
-    <div className="flex h-screen flex-col">
-      {/* Top bar */}
-      <header className="flex flex-wrap items-center justify-between gap-2 border-b bg-white px-4 py-3">
-        <div>
-          <h1 className="text-lg font-semibold">Vehicle Fitness Inspection</h1>
-          <p className="text-xs text-gray-500">
-            {profile.full_name ?? profile.email} ·{" "}
-            <span className="font-medium capitalize">{profile.role}</span>
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => setShowNew(true)}
-            className="rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
-          >
-            + New Entry
-          </button>
-          <button
-            onClick={refresh}
-            className="rounded border border-gray-300 px-3 py-2 text-sm hover:bg-gray-50"
-          >
-            Refresh
-          </button>
-          <button
-            onClick={signOut}
-            className="rounded border border-gray-300 px-3 py-2 text-sm hover:bg-gray-50"
-          >
-            Sign out
-          </button>
-        </div>
-      </header>
+    <div className="flex h-screen overflow-hidden">
+      {/* Desktop sidebar */}
+      <aside className="hidden w-64 shrink-0 bg-gradient-to-b from-slate-900 via-slate-900 to-indigo-950 lg:block">
+        {nav}
+      </aside>
 
-      {/* Sheet tabs */}
-      <main className="flex min-h-0 flex-1 flex-col bg-white">
-        <VehicleGrid
-          key={tab}
-          data={rows}
-          columns={columns}
-          emptyText={EMPTY_TEXT[tab]}
-          search={search}
-          onSearchChange={setSearch}
-          actions={
-            <>
-              <button
-                type="button"
-                onClick={() => setShowImport(true)}
-                className="rounded border border-blue-600 bg-white px-3 py-1.5 text-sm font-medium text-blue-700 hover:bg-blue-50"
-              >
-                Import from File
-              </button>
-              <ExportMenu count={rows.length} onExport={handleExportList} />
-            </>
-          }
-        />
-
-        <nav className="flex gap-1 border-t bg-gray-100 px-2 pt-1" aria-label="Sheets">
-          {visibleTabs.map((t) => (
-            <button
-              key={t}
-              onClick={() => setTab(t)}
-              className={`rounded-t border border-b-0 px-4 py-1.5 text-sm ${
-                tab === t
-                  ? "border-gray-300 bg-white font-semibold text-blue-700"
-                  : "border-transparent text-gray-600 hover:bg-gray-200"
-              }`}
+      {/* Mobile drawer */}
+      <AnimatePresence>
+        {drawer && (
+          <>
+            <motion.div
+              className="fixed inset-0 z-40 bg-slate-950/60 backdrop-blur-sm lg:hidden"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setDrawer(false)}
+            />
+            <motion.aside
+              className="fixed inset-y-0 left-0 z-50 w-64 bg-gradient-to-b from-slate-900 to-indigo-950 lg:hidden"
+              initial={{ x: -280 }}
+              animate={{ x: 0 }}
+              exit={{ x: -280 }}
+              transition={{ type: "spring", stiffness: 380, damping: 38 }}
             >
-              {TAB_LABELS[t]}{" "}
-              <span className="ml-1 rounded-full bg-gray-200 px-1.5 text-xs">{counts[t]}</span>
+              <button
+                onClick={() => setDrawer(false)}
+                aria-label="Close menu"
+                className="absolute right-3 top-4 rounded-lg p-1.5 text-white/70 hover:bg-white/10"
+              >
+                <X className="h-5 w-5" />
+              </button>
+              {nav}
+            </motion.aside>
+          </>
+        )}
+      </AnimatePresence>
+
+      <div className="flex min-w-0 flex-1 flex-col">
+        {/* Top bar */}
+        <header className="flex items-center justify-between gap-3 border-b border-slate-200/80 bg-white/80 px-4 py-3 backdrop-blur sm:px-6">
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setDrawer(true)}
+              aria-label="Open menu"
+              className="rounded-lg p-2 text-slate-600 hover:bg-slate-100 lg:hidden"
+            >
+              <Menu className="h-5 w-5" />
             </button>
-          ))}
-        </nav>
-      </main>
+            <div>
+              <h1 className="text-lg font-semibold text-slate-900">{TAB_LABELS[tab]}</h1>
+              <p className="hidden text-xs text-slate-500 sm:block">
+                Welcome back, {displayName}
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={() => setDialog({ kind: "new" })}
+            className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-700"
+          >
+            <Plus className="h-4 w-4" />
+            <span className="hidden sm:inline">New Entry</span>
+          </button>
+        </header>
 
-      {showImport && (
-        <ImportModal
-          existingPlates={existingPlates}
-          onImport={handleImport}
-          onClose={() => setShowImport(false)}
-        />
-      )}
-      {showNew && <NewEntryModal onClose={() => setShowNew(false)} onSubmit={handleAdd} />}
-      {inspecting && (
-        <InspectModal
-          vehicle={inspecting.vehicle}
-          decision={inspecting.decision}
-          onClose={() => setInspecting(null)}
-          onConfirm={handleDecision}
-        />
-      )}
+        <main className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden p-4 sm:p-6">
+          {/* Animated counters */}
+          <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
+            {stats.map(({ label, value, Icon, tone }, i) => (
+              <motion.div
+                key={label}
+                initial={{ opacity: 0, y: 14 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: i * 0.07, type: "spring", stiffness: 260, damping: 24 }}
+                whileHover={{ y: -2 }}
+                className="flex items-center gap-4 rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200/70"
+              >
+                <div className={`grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-gradient-to-br ${tone} text-white shadow`}>
+                  <Icon className="h-5 w-5" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-2xl font-bold tabular-nums text-slate-900">
+                    <AnimatedNumber value={value} />
+                  </p>
+                  <p className="truncate text-xs font-medium text-slate-500">{label}</p>
+                </div>
+              </motion.div>
+            ))}
+          </div>
 
-      {toast && (
-        <div
-          role="status"
-          className={`fixed bottom-14 right-4 z-50 max-w-sm rounded px-4 py-3 text-sm text-white shadow-lg ${
-            toast.kind === "ok" ? "bg-green-700" : "bg-red-700"
-          }`}
-        >
-          {toast.text}
-        </div>
-      )}
+          {/* Tabs + grid */}
+          <section className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200/70">
+            <div className="flex gap-1 border-b border-slate-100 px-3 pt-2" role="tablist">
+              {(Object.keys(TAB_LABELS) as TabKey[]).map((t) => (
+                <button
+                  key={t}
+                  role="tab"
+                  aria-selected={tab === t}
+                  onClick={() => setTab(t)}
+                  className={`relative px-4 py-2.5 text-sm font-medium transition ${
+                    tab === t ? "text-indigo-700" : "text-slate-500 hover:text-slate-800"
+                  }`}
+                >
+                  {TAB_LABELS[t]}
+                  <span className="ml-2 rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-600">
+                    {t === "pending" ? counts.pending : counts.passed}
+                  </span>
+                  {tab === t && (
+                    <motion.span
+                      layoutId="tab-underline"
+                      className="absolute inset-x-2 -bottom-px h-0.5 rounded-full bg-indigo-600"
+                    />
+                  )}
+                </button>
+              ))}
+            </div>
+
+            <VehicleGrid
+              key={tab}
+              data={rows}
+              columns={columns}
+              emptyText={EMPTY_TEXT[tab]}
+              search={search}
+              onSearchChange={setSearch}
+              actions={
+                <>
+                  <button
+                    type="button"
+                    onClick={() => setDialog({ kind: "import" })}
+                    className="inline-flex items-center gap-2 rounded-xl border border-indigo-200 bg-indigo-50 px-3.5 py-2 text-sm font-medium text-indigo-700 transition hover:bg-indigo-100"
+                  >
+                    <FileUp className="h-4 w-4" />
+                    <span className="hidden sm:inline">Import Excel</span>
+                  </button>
+                  <ExportMenu count={rows.length} onExport={handleExportList} />
+                </>
+              }
+            />
+          </section>
+        </main>
+      </div>
+
+      <AnimatePresence>
+        {dialog?.kind === "new" && (
+          <EntryModal
+            key="new"
+            mode="add"
+            defaultName={displayName}
+            suggest={suggest}
+            onSubmit={handleAdd}
+            onClose={() => setDialog(null)}
+          />
+        )}
+        {dialog?.kind === "edit" && (
+          <EntryModal
+            key="edit"
+            mode="edit"
+            initial={dialog.vehicle}
+            defaultName={displayName}
+            suggest={suggest}
+            onSubmit={(input) => handleEdit(dialog.vehicle.id, input)}
+            onClose={() => setDialog(null)}
+          />
+        )}
+        {dialog?.kind === "import" && (
+          <ImportModal
+            key="import"
+            existingPlates={existingPlates}
+            onImport={handleImport}
+            onClose={() => setDialog(null)}
+          />
+        )}
+        {dialog?.kind === "delete" && (
+          <ConfirmModal
+            key="delete"
+            danger
+            title="Delete this entry?"
+            message={
+              <>
+                <b>{dialog.vehicle.registration_no}</b> (S.No {dialog.vehicle.id}) will be removed
+                permanently
+                {dialog.vehicle.status === "passed" ? ", and its e-certificate will no longer be valid" : ""}.
+                This cannot be undone.
+              </>
+            }
+            confirmLabel="Delete"
+            onConfirm={() => handleDelete(dialog.vehicle)}
+            onClose={() => setDialog(null)}
+          />
+        )}
+        {dialog?.kind === "verify" && (
+          <ConfirmModal
+            key="verify"
+            title="Verify vehicle and issue certificate?"
+            message={
+              <>
+                Mark <b>{dialog.vehicle.registration_no}</b> as verified. A certificate number is
+                generated and the record moves to the Verified / Passed list under your name.
+              </>
+            }
+            confirmLabel="Verify & issue"
+            onConfirm={() => handleVerify(dialog.vehicle)}
+            onClose={() => setDialog(null)}
+          />
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {toast && (
+          <motion.div
+            role="status"
+            initial={{ opacity: 0, y: 20, scale: 0.96 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 12 }}
+            className={`fixed bottom-5 right-5 z-[60] max-w-sm rounded-xl px-4 py-3 text-sm font-medium text-white shadow-xl ${
+              toast.kind === "ok" ? "bg-emerald-600" : "bg-rose-600"
+            }`}
+          >
+            {toast.text}
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

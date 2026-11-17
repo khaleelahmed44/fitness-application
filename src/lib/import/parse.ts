@@ -1,4 +1,4 @@
-import type { DocumentsStatus } from "@/types/database";
+import type { DocumentStatus } from "@/types/database";
 import { normaliseField } from "@/lib/normalise";
 
 export const MAX_IMPORT_ROWS = 2000;
@@ -9,9 +9,12 @@ export interface ParsedRow {
   /** Row number in the source file (1-based, as the user sees it) */
   line: number;
   registration_no: string;
-  chassis_no: string;
-  engine_no: string;
-  documents_status: DocumentsStatus;
+  document_status: DocumentStatus;
+  district: string;
+  traffic_station: string;
+  collected_by_or_operator_name: string;
+  /** YYYY-MM-DD, or undefined to use today's date */
+  date_of_entry?: string;
 }
 
 export interface ParseResult {
@@ -34,11 +37,16 @@ const ALIASES = {
     "reg", "numberplate", "plateno", "platenumber", "plate", "vehicleno",
     "vehiclenumber", "registrationnoplate",
   ],
-  chassis_no: ["chassisno", "chassisnumber", "chassis", "chasisno", "chasisnumber", "chasis"],
-  engine_no: ["engineno", "enginenumber", "engine"],
-  documents_status: [
-    "documentsstatus", "documentstatus", "documents", "document", "docs",
-    "docstatus", "docsstatus",
+  document_status: [
+    "documentstatus", "documentsstatus", "documents", "document", "docs", "docstatus",
+    "documentsubmitoriginal", "documentoriginal", "originaldocument", "originalsubmitted",
+  ],
+  date_of_entry: ["dateofentry", "entrydate", "date", "dateentry"],
+  district: ["district", "dist"],
+  traffic_station: ["trafficstation", "station", "ps", "policestation"],
+  collected_by_or_operator_name: [
+    "name", "collectedby", "collectedbyoperatorname", "operatorname", "operator", "collector",
+    "dataentryname", "collectedbyname",
   ],
 } as const;
 
@@ -66,11 +74,34 @@ function cellToString(v: unknown): string {
   return "";
 }
 
-function normaliseDocs(v: string): DocumentsStatus {
+function normaliseDocs(v: string): DocumentStatus {
   const s = v.trim().toLowerCase();
-  return ["verified", "yes", "y", "true", "ok", "done", "1"].includes(s)
-    ? "Verified"
-    : "Pending";
+  return ["yes", "y", "verified", "true", "ok", "done", "submitted", "1"].includes(s) ? "Yes" : "No";
+}
+
+/** Accepts YYYY-MM-DD, DD/MM/YYYY, DD-MM-YYYY and Excel serial numbers. Returns null if unreadable. */
+function parseDate(v: string): string | null {
+  const s = v.trim();
+  if (!s) return null;
+  const iso = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+  let y: number, m: number, d: number;
+  if (iso) {
+    [y, m, d] = [Number(iso[1]), Number(iso[2]), Number(iso[3])];
+  } else {
+    const dmy = s.match(/^(\d{1,2})[/.\-](\d{1,2})[/.\-](\d{2}|\d{4})$/);
+    if (dmy) {
+      d = Number(dmy[1]);
+      m = Number(dmy[2]);
+      y = Number(dmy[3]);
+      if (y < 100) y += 2000;
+    } else if (/^\d{5}$/.test(s)) {
+      const dt = new Date(Math.round((Number(s) - 25569) * 86400 * 1000));
+      return Number.isNaN(dt.getTime()) ? null : dt.toISOString().slice(0, 10);
+    } else return null;
+  }
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  if (dt.getUTCFullYear() !== y || dt.getUTCMonth() !== m - 1 || dt.getUTCDate() !== d) return null;
+  return dt.toISOString().slice(0, 10);
 }
 
 // ---- readers ------------------------------------------------------------
@@ -171,59 +202,66 @@ export async function parseVehicleFile(file: File): Promise<ParseResult> {
   const [header, ...data] = rows;
   const col = {
     registration_no: findColumn(header.cells, "registration_no"),
-    chassis_no: findColumn(header.cells, "chassis_no"),
-    engine_no: findColumn(header.cells, "engine_no"),
-    documents_status: findColumn(header.cells, "documents_status"),
+    document_status: findColumn(header.cells, "document_status"),
+    date_of_entry: findColumn(header.cells, "date_of_entry"),
+    district: findColumn(header.cells, "district"),
+    traffic_station: findColumn(header.cells, "traffic_station"),
+    collected_by_or_operator_name: findColumn(header.cells, "collected_by_or_operator_name"),
   };
 
-  const missing: string[] = [];
-  if (col.registration_no < 0) missing.push("Registration No / Number Plate");
-  if (col.chassis_no < 0) missing.push("Chassis No");
-  if (col.engine_no < 0) missing.push("Engine No");
-  if (missing.length) {
+  if (col.registration_no < 0) {
     throw new Error(
-      `Missing column(s): ${missing.join(", ")}. The first row of the file must be a header row.`
+      "Missing column: Vehicle No. The first row of the file must be a header row (see the template)."
     );
   }
   if (data.length > MAX_IMPORT_ROWS) {
     throw new Error(`Too many rows (${data.length}). The maximum per import is ${MAX_IMPORT_ROWS}.`);
   }
 
+  const cell = (r: RawRow, i: number) => (i >= 0 ? (r.cells[i] ?? "").trim() : "");
+
   const valid: ParsedRow[] = [];
   const invalid: ParseResult["invalid"] = [];
   const seen = new Map<string, number>();
 
   for (const r of data) {
-    const reg = normaliseField(r.cells[col.registration_no] ?? "");
-    const chassis = normaliseField(r.cells[col.chassis_no] ?? "");
-    const engine = normaliseField(r.cells[col.engine_no] ?? "");
-    const docs =
-      col.documents_status >= 0 ? normaliseDocs(r.cells[col.documents_status] ?? "") : "Pending";
+    const reg = normaliseField(cell(r, col.registration_no));
+    const district = cell(r, col.district);
+    const station = cell(r, col.traffic_station);
+    const name = cell(r, col.collected_by_or_operator_name);
+    const rawDate = cell(r, col.date_of_entry);
 
-    const absent: string[] = [];
-    if (!reg) absent.push("number plate");
-    if (!chassis) absent.push("chassis no");
-    if (!engine) absent.push("engine no");
-    if (absent.length) {
-      invalid.push({ line: r.line, message: `Missing ${absent.join(", ")}` });
+    if (!reg) {
+      invalid.push({ line: r.line, message: "Missing vehicle no" });
       continue;
     }
-    if ([reg, chassis, engine].some((v) => v.length > MAX_FIELD_LENGTH)) {
+    if ([reg, district, station, name].some((v) => v.length > MAX_FIELD_LENGTH)) {
       invalid.push({ line: r.line, message: `A value is longer than ${MAX_FIELD_LENGTH} characters` });
       continue;
     }
+    let date: string | undefined;
+    if (rawDate) {
+      const parsed = parseDate(rawDate);
+      if (!parsed) {
+        invalid.push({ line: r.line, message: `Unreadable date "${rawDate}" (use DD/MM/YYYY)` });
+        continue;
+      }
+      date = parsed;
+    }
     const first = seen.get(reg);
     if (first !== undefined) {
-      invalid.push({ line: r.line, message: `Duplicate plate ${reg} (first on row ${first})` });
+      invalid.push({ line: r.line, message: `Duplicate vehicle ${reg} (first on row ${first})` });
       continue;
     }
     seen.set(reg, r.line);
     valid.push({
       line: r.line,
       registration_no: reg,
-      chassis_no: chassis,
-      engine_no: engine,
-      documents_status: docs,
+      document_status: normaliseDocs(cell(r, col.document_status)),
+      district,
+      traffic_station: station,
+      collected_by_or_operator_name: name,
+      date_of_entry: date,
     });
   }
 
@@ -231,6 +269,6 @@ export async function parseVehicleFile(file: File): Promise<ParseResult> {
 }
 
 export const TEMPLATE_CSV =
-  "Registration No,Chassis No,Engine No,Documents Status\r\n" +
-  "LEA-1234,CH0012345,EN0012345,Verified\r\n" +
-  "LEB-5678,CH0067890,EN0067890,Pending\r\n";
+  "Vehicle No,Document (Original Submitted),Date of Entry,District,Traffic Station,Name\r\n" +
+  "LEA-1234,Yes,17/11/2026,Lahore,Model Town,Ali Raza\r\n" +
+  "LEB-5678,No,17/11/2026,Kasur,City Station,Usman Khan\r\n";

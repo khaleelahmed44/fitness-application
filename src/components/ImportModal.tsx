@@ -75,11 +75,11 @@ export default function ImportModal({ existingPlates, onImport, onClose }: Props
       <div className="space-y-4 text-sm">
         {!result && (
           <>
-            <p className="text-gray-600">
-              Upload an Excel (<b>.xlsx</b>) or <b>.csv</b> file. The first row must be a header
-              row with: <b>Registration No</b> (Number Plate), <b>Chassis No</b>, <b>Engine No</b>{" "}
-              and optionally <b>Documents Status</b> (Verified / Pending). Valid rows are added to
-              the Pending Inspection queue.
+            <p className="text-slate-600">
+              Upload an Excel (<b>.xlsx</b>) or <b>.csv</b> file with a header row. Columns:{" "}
+              <b>Vehicle No</b> (required), <b>Document</b> (Yes / No), <b>Date of Entry</b>,{" "}
+              <b>District</b>, <b>Traffic Station</b> and <b>Name</b>. Valid rows go to the Pending
+              queue.
             </p>
             <div className="flex flex-wrap items-center gap-3">
               <input
@@ -88,7 +88,7 @@ export default function ImportModal({ existingPlates, onImport, onClose }: Props
                 accept=".xlsx,.csv,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                 disabled={busy}
                 onChange={(e) => handleFile(e.target.files?.[0])}
-                className="text-sm file:mr-3 file:rounded file:border-0 file:bg-blue-600 file:px-4 file:py-2 file:text-sm file:font-medium file:text-white hover:file:bg-blue-700"
+                className="text-sm file:mr-3 file:rounded file:border-0 file:bg-indigo-600 file:px-4 file:py-2 file:text-sm file:font-medium file:text-white hover:file:bg-indigo-700"
               />
               <button
                 type="button"
@@ -98,7 +98,7 @@ export default function ImportModal({ existingPlates, onImport, onClose }: Props
                     "vehicle-import-template.csv"
                   )
                 }
-                className="text-blue-600 hover:underline"
+                className="text-indigo-600 hover:underline"
               >
                 Download template
               </button>
@@ -129,7 +129,7 @@ export default function ImportModal({ existingPlates, onImport, onClose }: Props
                 <table className="w-full border-collapse text-xs">
                   <thead className="sticky top-0 bg-gray-100">
                     <tr>
-                      {["Row", "Number Plate", "Chassis No", "Engine No", "Documents"].map((h) => (
+                      {["Row", "Vehicle No", "Document", "Date", "District", "Traffic Station", "Name"].map((h) => (
                         <th key={h} className="border-b px-2 py-1 text-left font-semibold">
                           {h}
                         </th>
@@ -141,9 +141,11 @@ export default function ImportModal({ existingPlates, onImport, onClose }: Props
                       <tr key={r.line} className="border-b last:border-0">
                         <td className="px-2 py-1 text-gray-500">{r.line}</td>
                         <td className="px-2 py-1 font-medium">{r.registration_no}</td>
-                        <td className="px-2 py-1">{r.chassis_no}</td>
-                        <td className="px-2 py-1">{r.engine_no}</td>
-                        <td className="px-2 py-1">{r.documents_status}</td>
+                        <td className="px-2 py-1">{r.document_status}</td>
+                        <td className="px-2 py-1">{r.date_of_entry ?? "today"}</td>
+                        <td className="px-2 py-1">{r.district}</td>
+                        <td className="px-2 py-1">{r.traffic_station}</td>
+                        <td className="px-2 py-1">{r.collected_by_or_operator_name}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -208,7 +210,7 @@ export default function ImportModal({ existingPlates, onImport, onClose }: Props
               type="button"
               disabled={busy || preview.valid.length === 0}
               onClick={handleImport}
-              className="rounded bg-blue-600 px-4 py-2 font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+              className="rounded bg-indigo-600 px-4 py-2 font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
             >
               {busy ? "Importing…" : `Import ${preview.valid.length} vehicle${preview.valid.length === 1 ? "" : "s"}`}
             </button>

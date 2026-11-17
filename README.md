@@ -4,52 +4,59 @@ Excel-style vehicle inspection tool: operators log vehicles, inspectors Pass/Fai
 
 **Stack:** Next.js 15 (App Router, TypeScript) · Tailwind CSS · TanStack Table · Supabase (Postgres + Auth + RLS) · Vercel
 
+## Register format (notebook columns)
+
+| Column | Meaning |
+|---|---|
+| S.No (`id`) | Auto-incrementing serial number |
+| Vehicle No (`registration_no`) | Number plate (upper-cased) |
+| Document (`document_status`) | Original documents submitted: Yes / No |
+| Date of Entry (`date_of_entry`) | Captured automatically on creation (Asia/Karachi), immutable |
+| District, Traffic Station | Free text with one-click history suggestions |
+| Name (`collected_by_or_operator_name`) | Who collected the vehicle / entered it (defaults to the signed-in user) |
+
+Workflow columns: `status` (pending / passed), `certificate_no`, `verified_by(_name)`, `verified_at`, `created_by`.
+
 ## Project structure
 
 ```
-supabase/migrations/001_init.sql      Tables, indexes, trigger, RLS policies
+supabase/migrations/001_init.sql            v1 tables, role helper, profiles
+supabase/migrations/002_notebook_schema.sql v2 register, triggers, RLS, realtime (run after 001)
 src/
-  middleware.ts                       Session refresh + redirect to /login
-  types/database.ts                   Vehicle / Profile / Role types
+  middleware.ts                             Session refresh + redirect to /login
+  types/database.ts                         Vehicle / Profile / Role types, canModify()
   lib/
     supabase/{client,server,middleware}.ts
-    vehicle-actions.ts                addVehicle, inspectVehicle (pass/fail), setDocumentsStatus
+    vehicle-actions.ts                      add / update / delete / verify / import
+    suggestions.ts                          History suggestions per field
+    import/parse.ts                         .xlsx / .csv parser
+    export/*                                PDF / Excel / Word exporters
   components/
-    Dashboard.tsx                     Tabs, toolbar, state, handlers
-    VehicleGrid.tsx                   TanStack Table, Excel-style grid
-    columns.tsx                       Column sets for Pending / Passed / Failed
-    NewEntryModal.tsx                 Data-entry form
-    InspectModal.tsx                  Pass/Fail confirmation (remarks)
-    Certificate.tsx                   A4 certificate layout
-    PrintButton.tsx, Modal.tsx
-  app/
-    layout.tsx, globals.css           (@media print rules for A4)
-    page.tsx                          Dashboard (server-fetched)
-    login/page.tsx                    Sign in / sign up
-    certificate/[id]/page.tsx         Printable certificate
+    Dashboard.tsx                           Sidebar, animated counters, tabs, live updates
+    VehicleGrid.tsx, columns.tsx            TanStack Table notebook grid
+    EntryModal.tsx, SuggestInput.tsx        New / edit form with autocomplete + recent chips
+    ImportModal.tsx, ExportMenu.tsx, ConfirmModal.tsx, Modal.tsx, AnimatedNumber.tsx
+    Certificate.tsx, PrintButton.tsx        A4 printable certificate
+  app/  layout, page, login, certificate/[id]
 ```
 
 ## Import & export
 
-**Import from File** (button above the grid): upload an `.xlsx` or `.csv` with a header row containing
-*Registration No / Number Plate*, *Chassis No*, *Engine No* and optionally *Documents Status*
-(Verified / Pending). A preview shows valid rows and skipped rows (missing values, duplicates in the file,
-plates already pending); valid rows are inserted into the Pending queue. Limits: 5 MB, 2,000 rows per import.
-Use "Download template" in the dialog for a sample file.
+**Import Excel**: upload `.xlsx` / `.csv` with a header row: *Vehicle No* (required), *Document* (Yes/No),
+*Date of Entry* (DD/MM/YYYY, optional), *District*, *Traffic Station*, *Name*. A preview shows valid and skipped rows
+(missing vehicle no, duplicates, already pending). Limits: 5 MB, 2,000 rows. "Download template" gives a sample.
 
-**Export** (button above the grid): downloads the rows currently shown in the active tab
-(respecting the search box) as **PDF**, **Excel (.xlsx)** or **Word (.docx)**.
-Each row also has PDF / XLSX / DOCX buttons: on the Passed tab, PDF and DOCX produce the e-certificate;
-on Pending / Failed they produce a record sheet. Exports only contain what the signed-in user's role is
-allowed to see (operators: pending only).
+**Export**: the rows in the active tab (respecting search) as **PDF**, **Excel** or **Word**; on both the Pending and the
+Verified / Passed table. Each row also has PDF / XLSX / DOCX buttons (verified rows export the e-certificate).
 
 ## How security works
 
-- **Operators** (default role for every sign-up): can INSERT vehicles (forced to `pending`) and SELECT pending rows only. They cannot update anything, and they cannot read passed/failed rows or certificates.
-- **Inspectors / Admins**: can SELECT everything and UPDATE pending rows.
-- **Certificate number, inspector name and timestamp are generated by a database trigger** (`vehicles_before_update`), not by the browser, so they cannot be forged. The trigger also: blocks passing unless documents are `Verified`, requires remarks to fail, locks finalised rows, and makes plate/chassis/engine immutable.
-- There is no DELETE policy, so records cannot be removed through the API.
-- Users cannot change their own role; roles are only changed via SQL (below).
+- Everything is behind sign-in; the `anon` role has no access to `vehicles`. Row-Level Security is enforced in Postgres, not in the browser.
+- **View / add**: any signed-in user with a profile (new entries are forced to `pending` and owned by the creator).
+- **Edit / delete** (RLS `UPDATE` and `DELETE` policies): **admin** — any record; **pending** — its creator or any inspector; **verified** — the inspector who verified it (admins always).
+- **Verify**: inspectors / admins only. The certificate number, verifier and timestamp are generated by the `vehicles_guard` trigger, so they cannot be forged. Verification requires Document = Yes.
+- Date of entry, creator and S.No are immutable. Roles are changed only via SQL, e.g.
+  `update public.profiles set role = 'inspector' where email = 'user@example.com';`
 
 ## Run locally
 

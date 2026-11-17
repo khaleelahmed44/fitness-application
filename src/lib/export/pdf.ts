@@ -107,7 +107,7 @@ export async function exportCertificatePdf(v: Vehicle, filename: string): Promis
   doc.setFontSize(11);
   doc.setTextColor(40, 40, 40);
   doc.text(
-    "This is to certify that the vehicle described below has been inspected and found FIT for road use as of the date of inspection.",
+    "This is to certify that the vehicle described below has been verified and found FIT for road use as of the date of inspection.",
     105,
     116,
     { align: "center", maxWidth: 150 }
@@ -125,21 +125,15 @@ export async function exportCertificatePdf(v: Vehicle, filename: string): Promis
     },
   });
 
-  if (v.remarks) {
-    doc.setFontSize(10);
-    doc.setTextColor(60, 60, 60);
-    doc.text(`Remarks: ${v.remarks}`, 25, 212, { maxWidth: 160 });
-  }
-
   doc.setDrawColor(60, 60, 60);
   doc.setLineWidth(0.3);
   doc.line(25, 252, 95, 252);
   doc.setFontSize(12);
   doc.setTextColor(20, 20, 20);
-  doc.text(v.inspector_name ?? "", 25, 250);
+  doc.text(v.verified_by_name ?? "", 25, 250);
   doc.setFontSize(8);
   doc.setTextColor(110, 110, 110);
-  doc.text("INSPECTING OFFICER", 25, 257);
+  doc.text("VERIFYING OFFICER", 25, 257);
   doc.text(`Issued electronically on ${fmtLong(issued)}`, 185, 250, { align: "right" });
   doc.text(`Verify using certificate no. ${v.certificate_no ?? ""}`, 185, 256, { align: "right" });
 
@@ -154,7 +148,7 @@ export async function exportCertificatePdf(v: Vehicle, filename: string): Promis
   doc.save(filename);
 }
 
-/** Single-record sheet for pending / failed vehicles. */
+/** Single-record sheet for a pending vehicle. */
 export async function exportRecordPdf(v: Vehicle, filename: string): Promise<void> {
   const { jsPDF } = await import("jspdf");
   const autoTable = (await import("jspdf-autotable")).default;

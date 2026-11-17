@@ -29,11 +29,11 @@ export default async function HomePage() {
     );
   }
 
-  // RLS decides what comes back: operators get pending rows only, inspectors get all.
+  // RLS: only signed-in users with a profile can read the register.
   const { data: vehicles } = await supabase
     .from("vehicles")
     .select("*")
-    .order("created_at", { ascending: false })
+    .order("id", { ascending: false })
     .returns<Vehicle[]>();
 
   return <Dashboard profile={profile} initialVehicles={vehicles ?? []} />;
