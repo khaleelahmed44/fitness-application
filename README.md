@@ -50,8 +50,8 @@ src/
 
 ## Roles & security (3 tiers, username + password, no email OTP)
 
-- **Super Admin** (exactly one, enforced by a unique index; cannot be removed): opens the Admin Panel (`/admin`), adds / removes inspectors, resets passwords, monitors all data and users, and is the only role that can **delete** records (they go to a recycle bin: restore or purge).
-- **Inspector** (created by the Admin): sees every record, edits any field, toggles **Verify / Unverify** (certificate number issued on Verify, withdrawn on Unverify), and manages their own Assistants at `/team`.
+- **Super Admin** (exactly one, enforced by a unique index; cannot be removed): opens the Admin Panel (`/admin`), adds / removes inspectors, resets passwords, monitors all data and users, and manages the recycle bin (restore or purge). Admin and Inspector can both **delete** records (single or *Delete all*); every delete is archived in the bin.
+- **Inspector** (created by the Admin): sees every record, edits any field, deletes records (single or *Delete all* in the current tab), toggles **Verify / Unverify** (certificate number issued on Verify, withdrawn on Unverify), and manages their own Assistants at `/team`.
 - **Assistant / Data Entry** (created by an Inspector): manual entries, edits their own pending rows, Import and Export.
 - **Login** is a plain username + password. Internally a username maps to a never-mailed address `<username>@vehicle.local` (spaces become dots). Users are created pre-confirmed, so no email is ever sent.
 - **No self-registration**: accounts exist only through the `create_user` RPC (Admin creates Inspectors, Inspectors create Assistants). Anyone calling the raw Auth API gets no profile and no data access.

@@ -54,7 +54,7 @@ export function canEdit(v: Vehicle, userId: string, role: Role): boolean {
 }
 
 /** Delete / recycle: super admin only (mirrors RLS). */
-export const canDelete = (role: Role | undefined): boolean => role === "admin";
+export const canDelete = (role: Role | undefined): boolean => role === "admin" || role === "inspector";
 
 export interface ManagedUser {
   id: string;

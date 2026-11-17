@@ -61,6 +61,24 @@ export async function deleteVehicle(supabase: SupabaseClient, id: number): Promi
   }
 }
 
+/** Admin / inspector: delete many records (each is archived in the recycle bin by a DB trigger). */
+export async function deleteVehicles(supabase: SupabaseClient, ids: number[]): Promise<number> {
+  let deleted = 0;
+  for (let i = 0; i < ids.length; i += 200) {
+    const { data, error } = await supabase
+      .from("vehicles")
+      .delete()
+      .in("id", ids.slice(i, i + 200))
+      .select("id");
+    if (error) throw explain(error);
+    deleted += data?.length ?? 0;
+  }
+  if (ids.length > 0 && deleted === 0) {
+    throw new ActionError("You are not authorised to delete these records.");
+  }
+  return deleted;
+}
+
 /**
  * Inspector / admin: turn verification on or off.
  * Certificate number, verifier and timestamp are set (or cleared) by a DB trigger.

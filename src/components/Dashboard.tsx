@@ -14,6 +14,7 @@ import {
   Menu,
   Plus,
   ShieldCheck,
+  Trash2,
   Truck,
   Users,
   X,
@@ -22,6 +23,7 @@ import { createClient } from "@/lib/supabase/client";
 import {
   addVehicle,
   deleteVehicle,
+  deleteVehicles,
   importVehicles,
   updateVehicle,
   setVerification,
@@ -60,6 +62,7 @@ type Dialog =
   | { kind: "delete"; vehicle: Vehicle }
   | { kind: "verify"; vehicle: Vehicle; to: boolean }
   | { kind: "import" }
+  | { kind: "deleteAll" }
   | null;
 
 const todayIso = () =>
@@ -139,6 +142,18 @@ export default function Dashboard({ profile, initialVehicles }: Props) {
       await deleteVehicle(supabase, v.id);
       setVehicles((prev) => prev.filter((p) => p.id !== v.id));
       flash("ok", `${v.registration_no} deleted.`);
+    } catch (err) {
+      await refresh();
+      throw err;
+    }
+  };
+
+  const handleDeleteAll = async () => {
+    const ids = rows.map((r) => r.id);
+    try {
+      const n = await deleteVehicles(supabase, ids);
+      setVehicles((prev) => prev.filter((p) => !ids.includes(p.id)));
+      flash("ok", `${n} record(s) deleted.`);
     } catch (err) {
       await refresh();
       throw err;
@@ -496,6 +511,17 @@ export default function Dashboard({ profile, initialVehicles }: Props) {
                     <FileUp className="h-4 w-4" />
                     <span className="hidden sm:inline">Import Excel</span>
                   </button>
+                  {canDelete(profile.role) && (
+                    <button
+                      type="button"
+                      disabled={rows.length === 0}
+                      onClick={() => setDialog({ kind: "deleteAll" })}
+                      className="inline-flex items-center gap-2 rounded-xl border border-rose-200 bg-rose-50 px-3.5 py-2 text-sm font-medium text-rose-700 transition hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                      <span className="hidden sm:inline">Delete all ({rows.length})</span>
+                    </button>
+                  )}
                   <ExportMenu
                     counts={{ all: counts.total, verified: counts.passed, pending: counts.pending }}
                     onExport={handleExportList}
@@ -534,6 +560,25 @@ export default function Dashboard({ profile, initialVehicles }: Props) {
             key="import"
             existingPlates={existingPlates}
             onImport={handleImport}
+            onClose={() => setDialog(null)}
+          />
+        )}
+        {dialog?.kind === "deleteAll" && (
+          <ConfirmModal
+            key="delete-all"
+            danger
+            requireText="DELETE"
+            title={`Delete all ${rows.length} records?`}
+            message={
+              <>
+                Every record currently listed in <b>{tab === "pending" ? "Pending / Not Verified" : "Verified"}</b>
+                {search.trim() ? <> (matching your search)</> : null} will be removed from the register
+                {tab === "passed" ? " and their e-certificates will no longer be valid" : ""}. Copies are kept in the
+                Admin Panel recycle bin.
+              </>
+            }
+            confirmLabel={`Delete ${rows.length}`}
+            onConfirm={handleDeleteAll}
             onClose={() => setDialog(null)}
           />
         )}
