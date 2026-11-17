@@ -26,7 +26,7 @@ import {
 } from "@/lib/vehicle-actions";
 import { exportList, exportRecord, type ExportFormat } from "@/lib/export";
 import { suggestionsFor, type SuggestField } from "@/lib/suggestions";
-import { canModify, canVerify, type Profile, type Vehicle, type VehicleInput } from "@/types/database";
+import { canEdit, canModify, canVerify, type Profile, type Vehicle, type VehicleInput } from "@/types/database";
 import VehicleGrid from "./VehicleGrid";
 import EntryModal from "./EntryModal";
 import ImportModal from "./ImportModal";
@@ -249,9 +249,9 @@ export default function Dashboard({ profile, initialVehicles }: Props) {
   const columns = useMemo(
     () =>
       buildColumns(tab, {
-        canModify: (v) => canModify(v, profile.id, profile.role),
-        canToggle: (v) =>
-          verifier && (v.status === "pending" || canModify(v, profile.id, profile.role)),
+        canEdit: (v) => canEdit(v, profile.id, profile.role),
+        canDelete: (v) => canModify(v, profile.id, profile.role),
+        canToggle: () => verifier,
         busyId,
         onToggleVerify: (v) => setDialog({ kind: "verify", vehicle: v, to: v.status !== "passed" }),
         onEdit: (v) => setDialog({ kind: "edit", vehicle: v }),

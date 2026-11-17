@@ -6,7 +6,8 @@ import type { ExportFormat } from "@/lib/export";
 export type TabKey = "pending" | "passed";
 
 interface Options {
-  canModify: (v: Vehicle) => boolean;
+  canEdit: (v: Vehicle) => boolean;
+  canDelete: (v: Vehicle) => boolean;
   busyId: number | null;
   /** Whether the signed-in user may switch this row's verification */
   canToggle: (v: Vehicle) => boolean;
@@ -129,7 +130,8 @@ export function buildColumns(tab: TabKey, o: Options): ColumnDef<Vehicle, any>[]
       enableSorting: false,
       cell: (c) => {
         const v = c.row.original;
-        const editable = o.canModify(v);
+        const editable = o.canEdit(v);
+        const deletable = o.canDelete(v);
         return (
           <div className="flex items-center gap-1">
             {tab === "passed" && (
@@ -144,18 +146,18 @@ export function buildColumns(tab: TabKey, o: Options): ColumnDef<Vehicle, any>[]
               </a>
             )}
             {editable && (
-              <>
-                <button className={iconBtn} title="Edit" onClick={() => o.onEdit(v)}>
-                  <Pencil className="h-4 w-4" />
-                </button>
-                <button
-                  className={`${iconBtn} hover:!bg-rose-50 hover:!text-rose-600`}
-                  title="Delete"
-                  onClick={() => o.onDelete(v)}
-                >
-                  <Trash2 className="h-4 w-4" />
-                </button>
-              </>
+              <button className={iconBtn} title="Edit" onClick={() => o.onEdit(v)}>
+                <Pencil className="h-4 w-4" />
+              </button>
+            )}
+            {deletable && (
+              <button
+                className={`${iconBtn} hover:!bg-rose-50 hover:!text-rose-600`}
+                title="Delete"
+                onClick={() => o.onDelete(v)}
+              >
+                <Trash2 className="h-4 w-4" />
+              </button>
             )}
           </div>
         );

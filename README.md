@@ -52,7 +52,7 @@ src/
 
 - Everything is behind sign-in; the `anon` role has no access to `vehicles`. Row-Level Security is enforced in Postgres, not in the browser.
 - **View / add**: any signed-in user with a profile (new entries are forced to `pending` and owned by the creator).
-- **Edit / delete** (RLS `UPDATE` and `DELETE` policies): **admin** — any record; **pending** — its creator or any inspector; **verified** — the inspector who verified it (admins always).
+- **Edit / delete** (RLS `UPDATE` and `DELETE` policies): **admin** — any record; **pending** — its creator or any inspector; **verified** — any inspector can edit it, but only the inspector who verified it can delete it (admins always).
 - **Verification toggle** (Verified / Not Verified): inspectors / admins only (un-verifying a record follows the same edit rule). Certificate number, verifier and timestamp are set — or cleared — by the `vehicles_guard` trigger, so they cannot be forged.
 - Date of entry, creator and S.No are immutable. Roles are changed only via SQL, e.g.
   `update public.profiles set role = 'inspector' where email = 'user@example.com';`
