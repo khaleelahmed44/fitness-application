@@ -68,11 +68,17 @@ export async function deleteVehicle(supabase: SupabaseClient, id: number): Promi
 export async function setVerification(
   supabase: SupabaseClient,
   id: number,
-  verified: boolean
+  verified: boolean,
+  /** Optional: who collected the vehicle, saved together with the verification */
+  collectedBy?: string
 ): Promise<Vehicle> {
+  const name = collectedBy ? clean(collectedBy) : "";
   const { data, error } = await supabase
     .from("vehicles")
-    .update({ status: verified ? "passed" : "pending" })
+    .update({
+      status: verified ? "passed" : "pending",
+      ...(verified && name ? { collected_by_or_operator_name: name } : {}),
+    })
     .eq("id", id)
     .eq("status", verified ? "pending" : "passed")
     .select();

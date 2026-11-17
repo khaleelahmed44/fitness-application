@@ -1,5 +1,5 @@
 import { createColumnHelper, type ColumnDef } from "@tanstack/react-table";
-import { Download, FileText, Pencil, Trash2 } from "lucide-react";
+import { BadgeCheck, Download, FileText, Pencil, Trash2 } from "lucide-react";
 import type { Vehicle } from "@/types/database";
 import type { ExportFormat } from "@/lib/export";
 
@@ -134,6 +134,17 @@ export function buildColumns(tab: TabKey, o: Options): ColumnDef<Vehicle, any>[]
         const deletable = o.canDelete(v);
         return (
           <div className="flex items-center gap-1">
+            {tab === "pending" && o.canToggle(v) && (
+              <button
+                onClick={() => o.onToggleVerify(v)}
+                disabled={o.busyId === v.id}
+                title="Verify this vehicle"
+                className="mr-1 inline-flex items-center gap-1 rounded-lg bg-emerald-600 px-3 py-1 text-xs font-semibold text-white shadow-sm transition hover:bg-emerald-700 disabled:opacity-40"
+              >
+                <BadgeCheck className="h-3.5 w-3.5" />
+                Verify
+              </button>
+            )}
             {tab === "passed" && (
               <a
                 href={`/certificate/${v.id}`}

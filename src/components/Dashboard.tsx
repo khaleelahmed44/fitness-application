@@ -31,6 +31,7 @@ import VehicleGrid from "./VehicleGrid";
 import EntryModal from "./EntryModal";
 import ImportModal from "./ImportModal";
 import ConfirmModal from "./ConfirmModal";
+import VerifyModal from "./VerifyModal";
 import ExportMenu from "./ExportMenu";
 import AnimatedNumber from "./AnimatedNumber";
 import { buildColumns, type TabKey } from "./columns";
@@ -141,10 +142,10 @@ export default function Dashboard({ profile, initialVehicles }: Props) {
     }
   };
 
-  const handleSetVerified = async (v: Vehicle, verified: boolean) => {
+  const handleSetVerified = async (v: Vehicle, verified: boolean, collectedBy?: string) => {
     setBusyId(v.id);
     try {
-      const updated = await setVerification(supabase, v.id, verified);
+      const updated = await setVerification(supabase, v.id, verified, collectedBy);
       upsertLocal(updated);
       setTab(verified ? "passed" : "pending");
       flash(
@@ -529,27 +530,28 @@ export default function Dashboard({ profile, initialVehicles }: Props) {
             onClose={() => setDialog(null)}
           />
         )}
-        {dialog?.kind === "verify" && (
+        {dialog?.kind === "verify" && dialog.to && (
+          <VerifyModal
+            key="verify-on"
+            vehicle={dialog.vehicle}
+            nameSuggestions={suggest.collected_by_or_operator_name}
+            onConfirm={(name) => handleSetVerified(dialog.vehicle, true, name)}
+            onClose={() => setDialog(null)}
+          />
+        )}
+        {dialog?.kind === "verify" && !dialog.to && (
           <ConfirmModal
-            key="verify"
-            danger={!dialog.to}
-            title={dialog.to ? "Mark as Verified?" : "Mark as Not Verified?"}
+            key="verify-off"
+            danger
+            title="Mark as Not Verified?"
             message={
-              dialog.to ? (
-                <>
-                  Mark <b>{dialog.vehicle.registration_no}</b> as <b>Verified</b>. A certificate number is
-                  generated and the record moves to the Verified / Passed list under your name.
-                </>
-              ) : (
-                <>
-                  Mark <b>{dialog.vehicle.registration_no}</b> as <b>Not Verified</b>. Its certificate
-                  ({dialog.vehicle.certificate_no}) is withdrawn and the record returns to the Pending
-                  list.
-                </>
-              )
+              <>
+                Mark <b>{dialog.vehicle.registration_no}</b> as <b>Not Verified</b>. Its certificate (
+                {dialog.vehicle.certificate_no}) is withdrawn and the record returns to the Pending list.
+              </>
             }
-            confirmLabel={dialog.to ? "Mark Verified" : "Mark Not Verified"}
-            onConfirm={() => handleSetVerified(dialog.vehicle, dialog.to)}
+            confirmLabel="Mark Not Verified"
+            onConfirm={() => handleSetVerified(dialog.vehicle, false)}
             onClose={() => setDialog(null)}
           />
         )}
