@@ -77,7 +77,7 @@ export default function ImportModal({ existingPlates, onImport, onClose }: Props
           <>
             <p className="text-slate-600">
               Upload an Excel (<b>.xlsx</b>) or <b>.csv</b> file with a header row. Columns:{" "}
-              <b>Vehicle No</b> (required), <b>Document</b> (Yes / No), <b>Date of Entry</b>,{" "}
+              <b>Vehicle No</b> (required), <b>Documents Original Submitted</b> (free text), <b>Date of Entry</b>,{" "}
               <b>District</b>, <b>Traffic Station</b> and <b>Name</b>. Valid rows go to the Pending
               queue.
             </p>
@@ -129,7 +129,7 @@ export default function ImportModal({ existingPlates, onImport, onClose }: Props
                 <table className="w-full border-collapse text-xs">
                   <thead className="sticky top-0 bg-gray-100">
                     <tr>
-                      {["Row", "Vehicle No", "Document", "Date", "District", "Traffic Station", "Name"].map((h) => (
+                      {["Row", "Vehicle No", "Documents Original Submitted", "Date", "District", "Traffic Station", "Name"].map((h) => (
                         <th key={h} className="border-b px-2 py-1 text-left font-semibold">
                           {h}
                         </th>

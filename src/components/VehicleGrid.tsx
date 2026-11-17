@@ -45,7 +45,7 @@ export default function VehicleGrid({ data, columns, emptyText, search, onSearch
           <input
             value={search}
             onChange={(e) => onSearchChange(e.target.value)}
-            placeholder="Search vehicle no, district, station, name…"
+            placeholder="Search vehicle no, documents, district, station, name…"
             className="w-full rounded-xl border border-slate-200 bg-slate-50 py-2 pl-9 pr-3 text-sm outline-none transition focus:border-indigo-400 focus:bg-white focus:ring-4 focus:ring-indigo-100"
           />
         </div>

@@ -51,7 +51,7 @@ export default function ExportMenu({ count, onExport }: Props) {
         className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-sm font-medium text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
       >
         {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
-        {busy ? "Preparing…" : `Export (${count})`}
+        {busy ? "Preparing…" : `Export all (${count})`}
         <ChevronDown className="h-3.5 w-3.5 text-slate-400" />
       </button>
       <AnimatePresence>
@@ -62,8 +62,11 @@ export default function ExportMenu({ count, onExport }: Props) {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -6, scale: 0.97 }}
             transition={{ duration: 0.12 }}
-            className="absolute right-0 z-20 mt-2 w-52 overflow-hidden rounded-xl border border-slate-200 bg-white py-1 shadow-xl"
+            className="absolute right-0 z-20 mt-2 w-60 overflow-hidden rounded-xl border border-slate-200 bg-white py-1 shadow-xl"
           >
+            <p className="border-b border-slate-100 px-3.5 pb-2 pt-1.5 text-[11px] leading-snug text-slate-500">
+              One complete file: every record, verified and not verified.
+            </p>
             {OPTIONS.map(({ format, label, Icon }) => (
               <button
                 key={format}

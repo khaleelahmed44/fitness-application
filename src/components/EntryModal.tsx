@@ -4,7 +4,7 @@ import { useState } from "react";
 import { CalendarDays, Loader2 } from "lucide-react";
 import Modal from "./Modal";
 import SuggestInput from "./SuggestInput";
-import type { DocumentStatus, Vehicle, VehicleInput } from "@/types/database";
+import type { Vehicle, VehicleInput } from "@/types/database";
 import type { SuggestField } from "@/lib/suggestions";
 
 interface Props {
@@ -22,7 +22,7 @@ const todayLabel = () =>
 
 export default function EntryModal({ mode, initial, defaultName, suggest, onSubmit, onClose }: Props) {
   const [plate, setPlate] = useState(initial?.registration_no ?? "");
-  const [docs, setDocs] = useState<DocumentStatus>(initial?.document_status ?? "No");
+  const [docs, setDocs] = useState(initial?.document_status ?? "");
   const [district, setDistrict] = useState(initial?.district ?? "");
   const [station, setStation] = useState(initial?.traffic_station ?? "");
   const [name, setName] = useState(initial?.collected_by_or_operator_name ?? defaultName);
@@ -30,8 +30,6 @@ export default function EntryModal({ mode, initial, defaultName, suggest, onSubm
   const [error, setError] = useState<string | null>(null);
   const [added, setAdded] = useState(0);
   const [plateKey, setPlateKey] = useState(0);
-
-  const verified = initial?.status === "passed";
 
   async function save(another: boolean) {
     if (!plate.trim()) {
@@ -68,7 +66,7 @@ export default function EntryModal({ mode, initial, defaultName, suggest, onSubm
       title={mode === "add" ? "New Entry" : `Edit entry #${initial?.id}`}
       subtitle={
         mode === "add"
-          ? "Start typing to reuse earlier values, or tap a recent one."
+          ? "Start typing to reuse earlier values, or tap a recent one. List several documents with commas."
           : "Changes are checked against your permissions by the database."
       }
       onClose={onClose}
@@ -94,33 +92,15 @@ export default function EntryModal({ mode, initial, defaultName, suggest, onSubm
             autoFocus
           />
 
-          <div>
-            <span className="mb-1.5 block text-sm font-medium text-slate-700">
-              Document – original submitted
-            </span>
-            <div className="grid grid-cols-2 gap-1 rounded-xl bg-slate-100 p-1">
-              {(["Yes", "No"] as const).map((opt) => (
-                <button
-                  key={opt}
-                  type="button"
-                  disabled={verified && opt === "No"}
-                  onClick={() => setDocs(opt)}
-                  className={`rounded-lg py-2 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-40 ${
-                    docs === opt
-                      ? opt === "Yes"
-                        ? "bg-emerald-600 text-white shadow"
-                        : "bg-amber-500 text-white shadow"
-                      : "text-slate-600 hover:bg-white"
-                  }`}
-                >
-                  {opt}
-                </button>
-              ))}
-            </div>
-            {verified && (
-              <p className="mt-1.5 text-xs text-slate-500">Verified records must keep Document = Yes.</p>
-            )}
-          </div>
+          <SuggestInput
+            label="Documents Original Submitted"
+            value={docs}
+            onChange={setDocs}
+            suggestions={suggest.document_status}
+            placeholder="e.g. CNIC, Original Registration Book, Fitness Form"
+            maxLength={300}
+            multi
+          />
 
           <SuggestInput
             label="District"

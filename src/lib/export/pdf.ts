@@ -45,7 +45,7 @@ export async function exportListPdf(
     startY: 31,
     head: [cols.map((c) => c.header)],
     body: rows.map((v) => cols.map((c) => c.get(v))),
-    styles: { fontSize: 8, cellPadding: 2 },
+    styles: { fontSize: 7, cellPadding: 1.6, overflow: "linebreak" },
     headStyles: { fillColor: NAVY, textColor: 255 },
     alternateRowStyles: { fillColor: [243, 244, 246] },
     margin: { left: 14, right: 14 },

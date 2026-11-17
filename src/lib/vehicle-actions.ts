@@ -9,7 +9,7 @@ const clean = (s: string) => s.trim().replace(/\s+/g, " ");
 function payload(i: VehicleInput) {
   return {
     registration_no: normalise(i.registration_no),
-    document_status: i.document_status,
+    document_status: clean(i.document_status).replace(/[,;\s]+$/, ""),
     district: clean(i.district) || null,
     traffic_station: clean(i.traffic_station) || null,
     collected_by_or_operator_name: clean(i.collected_by_or_operator_name),
@@ -19,7 +19,7 @@ function payload(i: VehicleInput) {
 
 function explain(error: { code?: string; message: string }): ActionError {
   if (error.code === "23505") {
-    return new ActionError("This vehicle number is already in the pending queue.");
+    return new ActionError("This vehicle number is already in the pending queue (Not Verified).");
   }
   if (error.code === "42501") {
     return new ActionError("You are not authorised to do this.");
@@ -61,17 +61,24 @@ export async function deleteVehicle(supabase: SupabaseClient, id: number): Promi
   }
 }
 
-/** Inspector / admin: mark verified. Certificate no. + verifier are set by a DB trigger. */
-export async function verifyVehicle(supabase: SupabaseClient, id: number): Promise<Vehicle> {
+/**
+ * Inspector / admin: turn verification on or off.
+ * Certificate number, verifier and timestamp are set (or cleared) by a DB trigger.
+ */
+export async function setVerification(
+  supabase: SupabaseClient,
+  id: number,
+  verified: boolean
+): Promise<Vehicle> {
   const { data, error } = await supabase
     .from("vehicles")
-    .update({ status: "passed" })
+    .update({ status: verified ? "passed" : "pending" })
     .eq("id", id)
-    .eq("status", "pending")
+    .eq("status", verified ? "pending" : "passed")
     .select();
   if (error) throw explain(error);
   if (!data || data.length === 0) {
-    throw new ActionError("Could not verify: already verified, or you lack permission.");
+    throw new ActionError("Could not change verification: it already changed, or you lack permission.");
   }
   return data[0] as Vehicle;
 }

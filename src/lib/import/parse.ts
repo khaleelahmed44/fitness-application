@@ -1,4 +1,3 @@
-import type { DocumentStatus } from "@/types/database";
 import { normaliseField } from "@/lib/normalise";
 
 export const MAX_IMPORT_ROWS = 2000;
@@ -9,7 +8,7 @@ export interface ParsedRow {
   /** Row number in the source file (1-based, as the user sees it) */
   line: number;
   registration_no: string;
-  document_status: DocumentStatus;
+  document_status: string;
   district: string;
   traffic_station: string;
   collected_by_or_operator_name: string;
@@ -39,7 +38,7 @@ const ALIASES = {
   ],
   document_status: [
     "documentstatus", "documentsstatus", "documents", "document", "docs", "docstatus",
-    "documentsubmitoriginal", "documentoriginal", "originaldocument", "originalsubmitted",
+    "documentsoriginalsubmitted", "documentsubmitoriginal", "documentoriginal", "originaldocument", "originalsubmitted",
   ],
   date_of_entry: ["dateofentry", "entrydate", "date", "dateentry"],
   district: ["district", "dist"],
@@ -72,11 +71,6 @@ function cellToString(v: unknown): string {
     if ("text" in o) return cellToString(o.text); // hyperlink cell
   }
   return "";
-}
-
-function normaliseDocs(v: string): DocumentStatus {
-  const s = v.trim().toLowerCase();
-  return ["yes", "y", "verified", "true", "ok", "done", "submitted", "1"].includes(s) ? "Yes" : "No";
 }
 
 /** Accepts YYYY-MM-DD, DD/MM/YYYY, DD-MM-YYYY and Excel serial numbers. Returns null if unreadable. */
@@ -257,7 +251,7 @@ export async function parseVehicleFile(file: File): Promise<ParseResult> {
     valid.push({
       line: r.line,
       registration_no: reg,
-      document_status: normaliseDocs(cell(r, col.document_status)),
+      document_status: cell(r, col.document_status),
       district,
       traffic_station: station,
       collected_by_or_operator_name: name,
@@ -269,6 +263,6 @@ export async function parseVehicleFile(file: File): Promise<ParseResult> {
 }
 
 export const TEMPLATE_CSV =
-  "Vehicle No,Document (Original Submitted),Date of Entry,District,Traffic Station,Name\r\n" +
-  "LEA-1234,Yes,17/11/2026,Lahore,Model Town,Ali Raza\r\n" +
-  "LEB-5678,No,17/11/2026,Kasur,City Station,Usman Khan\r\n";
+  "Vehicle No,Documents Original Submitted,Date of Entry,District,Traffic Station,Name\r\n" +
+  "LEA-1234,"CNIC, Original Registration Book, Fitness Form",17/11/2026,Lahore,Model Town,Ali Raza\r\n" +
+  "LEB-5678,CNIC,17/11/2026,Kasur,City Station,Usman Khan\r\n";

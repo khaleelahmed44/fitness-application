@@ -1,15 +1,16 @@
 import { createColumnHelper, type ColumnDef } from "@tanstack/react-table";
-import { BadgeCheck, Download, FileText, Pencil, Trash2 } from "lucide-react";
-import type { DocumentStatus, Vehicle } from "@/types/database";
+import { Download, FileText, Pencil, Trash2 } from "lucide-react";
+import type { Vehicle } from "@/types/database";
 import type { ExportFormat } from "@/lib/export";
 
 export type TabKey = "pending" | "passed";
 
 interface Options {
-  canVerify: boolean;
   canModify: (v: Vehicle) => boolean;
   busyId: number | null;
-  onVerify: (v: Vehicle) => void;
+  /** Whether the signed-in user may switch this row's verification */
+  canToggle: (v: Vehicle) => boolean;
+  onToggleVerify: (v: Vehicle) => void;
   onEdit: (v: Vehicle) => void;
   onDelete: (v: Vehicle) => void;
   onExport: (v: Vehicle, format: ExportFormat) => void;
@@ -26,15 +27,49 @@ const fmtDate = (iso: string | null) =>
       })
     : "—";
 
-const DocBadge = ({ value }: { value: DocumentStatus }) => (
-  <span
-    className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${
-      value === "Yes" ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"
-    }`}
-  >
-    {value}
-  </span>
-);
+function VerifyToggle({ v, o }: { v: Vehicle; o: Options }) {
+  const on = v.status === "passed";
+  const allowed = o.canToggle(v);
+  const busy = o.busyId === v.id;
+  const label = on ? "Verified" : "Not Verified";
+
+  if (!allowed) {
+    return (
+      <span
+        title="Only an authorised inspector or admin can change verification"
+        className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${
+          on ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"
+        }`}
+      >
+        {label}
+      </span>
+    );
+  }
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={on}
+      aria-label={`${label} – click to change`}
+      disabled={busy}
+      onClick={() => o.onToggleVerify(v)}
+      className="group inline-flex items-center gap-2 disabled:opacity-50"
+    >
+      <span
+        className={`relative h-5 w-9 rounded-full transition-colors ${
+          on ? "bg-emerald-500" : "bg-slate-300 group-hover:bg-slate-400"
+        }`}
+      >
+        <span
+          className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-all ${
+            on ? "left-[18px]" : "left-0.5"
+          }`}
+        />
+      </span>
+      <span className={`text-xs font-semibold ${on ? "text-emerald-700" : "text-amber-700"}`}>{label}</span>
+    </button>
+  );
+}
 
 const dash = (v: string | null) => v || <span className="text-slate-300">—</span>;
 
@@ -52,8 +87,13 @@ export function buildColumns(tab: TabKey, o: Options): ColumnDef<Vehicle, any>[]
       cell: (c) => <span className="font-semibold text-slate-900">{c.getValue()}</span>,
     }),
     h.accessor("document_status", {
-      header: "Document",
-      cell: (c) => <DocBadge value={c.getValue()} />,
+      header: "Documents Original Submitted",
+      cell: (c) =>
+        c.getValue() ? (
+          <span className="block max-w-[260px] whitespace-normal leading-snug">{c.getValue()}</span>
+        ) : (
+          <span className="text-slate-300">—</span>
+        ),
     }),
     h.accessor("date_of_entry", { header: "Date of Entry", cell: (c) => fmtDate(c.getValue()) }),
     h.accessor("district", { header: "District", cell: (c) => dash(c.getValue()) }),
@@ -63,6 +103,13 @@ export function buildColumns(tab: TabKey, o: Options): ColumnDef<Vehicle, any>[]
       cell: (c) => dash(c.getValue()),
     }),
   ];
+
+  cols.push(
+    h.accessor("status", {
+      header: "Verification",
+      cell: (c) => <VerifyToggle v={c.row.original} o={o} />,
+    })
+  );
 
   if (tab === "passed") {
     cols.push(
@@ -82,25 +129,9 @@ export function buildColumns(tab: TabKey, o: Options): ColumnDef<Vehicle, any>[]
       enableSorting: false,
       cell: (c) => {
         const v = c.row.original;
-        const busy = o.busyId === v.id;
         const editable = o.canModify(v);
         return (
           <div className="flex items-center gap-1">
-            {tab === "pending" && o.canVerify && (
-              <button
-                disabled={busy || v.document_status !== "Yes"}
-                title={
-                  v.document_status !== "Yes"
-                    ? "Original documents must be submitted (Yes) before verifying"
-                    : "Verify and issue certificate"
-                }
-                onClick={() => o.onVerify(v)}
-                className="mr-1 inline-flex items-center gap-1 rounded-lg bg-emerald-600 px-2.5 py-1 text-xs font-semibold text-white shadow-sm transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-35"
-              >
-                <BadgeCheck className="h-3.5 w-3.5" />
-                Verify
-              </button>
-            )}
             {tab === "passed" && (
               <a
                 href={`/certificate/${v.id}`}
@@ -156,5 +187,7 @@ export function buildColumns(tab: TabKey, o: Options): ColumnDef<Vehicle, any>[]
     })
   );
 
-  return cols;
+  // Per-row downloads are e-certificates, so only verified rows get them.
+  // The Export button gives the single unified file for everything else.
+  return tab === "passed" ? cols : cols.filter((c) => c.id !== "download");
 }

@@ -15,7 +15,7 @@ export default function Certificate({ vehicle }: { vehicle: Vehicle }) {
 
   const rows: [string, string][] = [
     ["Vehicle No", vehicle.registration_no],
-    ["Original Documents Submitted", vehicle.document_status],
+    ["Documents Original Submitted", vehicle.document_status || "—"],
     ["Date of Entry", fmt(new Date(`${vehicle.date_of_entry}T00:00:00`))],
     ["District", vehicle.district ?? "—"],
     ["Traffic Station", vehicle.traffic_station ?? "—"],

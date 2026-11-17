@@ -10,7 +10,7 @@ export async function exportList(
   rows: Vehicle[]
 ): Promise<void> {
   if (rows.length === 0) throw new Error("There are no rows to export.");
-  const name = `${tab}-vehicles-${fileStamp()}.${format}`;
+  const name = `vehicle-register-${tab === "all" ? "complete" : tab}-${fileStamp()}.${format}`;
 
   if (format === "xlsx") {
     const { exportXlsx } = await import("./xlsx");

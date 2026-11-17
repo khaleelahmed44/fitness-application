@@ -1,6 +1,5 @@
 export type Role = "operator" | "inspector" | "admin";
 export type VehicleStatus = "pending" | "passed";
-export type DocumentStatus = "Yes" | "No";
 
 export interface Profile {
   id: string;
@@ -16,8 +15,8 @@ export interface Vehicle {
   id: number;
   /** Vehicle No */
   registration_no: string;
-  /** Document – original submitted (Yes / No) */
-  document_status: DocumentStatus;
+  /** Documents Original Submitted – free text, e.g. "CNIC, Original Registration Book" */
+  document_status: string;
   /** Date of entry (YYYY-MM-DD, auto-captured) */
   date_of_entry: string;
   district: string | null;
@@ -35,7 +34,7 @@ export interface Vehicle {
 
 export interface VehicleInput {
   registration_no: string;
-  document_status: DocumentStatus;
+  document_status: string;
   district: string;
   traffic_station: string;
   /** Leave blank to use the signed-in user's name (done by the database) */

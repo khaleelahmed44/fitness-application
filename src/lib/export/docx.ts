@@ -88,12 +88,12 @@ export async function exportListDocx(
     rows: [
       new TableRow({
         tableHeader: true,
-        children: cols.map((c) => cell(c.header, { bold: true, fill: NAVY, color: "FFFFFF", size: 18 })),
+        children: cols.map((c) => cell(c.header, { bold: true, fill: NAVY, color: "FFFFFF", size: 14 })),
       }),
       ...rows.map(
         (v) =>
           new TableRow({
-            children: cols.map((c) => cell(c.get(v), { size: 18 })),
+            children: cols.map((c) => cell(c.get(v), { size: 14 })),
           })
       ),
     ],

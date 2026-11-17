@@ -15,6 +15,8 @@ interface Props {
   maxLength?: number;
   autoFocus?: boolean;
   uppercase?: boolean;
+  /** Free-text list: picking a single item appends it ("CNIC, Fitness Form") */
+  multi?: boolean;
 }
 
 /**
@@ -31,6 +33,7 @@ export default function SuggestInput({
   maxLength = 50,
   autoFocus,
   uppercase,
+  multi,
 }: Props) {
   const id = useId();
   const [open, setOpen] = useState(false);
@@ -38,20 +41,41 @@ export default function SuggestInput({
   const blurTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const q = value.trim().toLowerCase();
+  // In multi mode the word being typed is the text after the last comma
+  const tokens = multi ? value.split(",") : [value];
+  const current = tokens[tokens.length - 1].trim().toLowerCase();
+  const already = new Set(tokens.slice(0, -1).map((t) => t.trim().toLowerCase()));
+
+  const isItem = (s: string) => multi && !/[,;]/.test(s);
   const matches = useMemo(
     () =>
       suggestions
-        .filter((s) => s.toLowerCase() !== q && (q === "" || s.toLowerCase().includes(q)))
+        .filter((s) => {
+          const sl = s.toLowerCase();
+          if (sl === q || sl === current) return false;
+          if (isItem(s) && already.has(sl)) return false;
+          return current === "" || sl.includes(current) || (multi === true && sl.includes(q));
+        })
         .slice(0, 8),
-    [suggestions, q]
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [suggestions, q, current, multi, value]
   );
   const chips = useMemo(
-    () => suggestions.filter((s) => s.toLowerCase() !== q).slice(0, 5),
-    [suggestions, q]
+    () =>
+      suggestions
+        .filter((s) => s.toLowerCase() !== q && !(isItem(s) && already.has(s.toLowerCase())))
+        .slice(0, 6),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [suggestions, q, multi, value]
   );
 
   const pick = (s: string) => {
-    onChange(s);
+    if (isItem(s)) {
+      const prefix = tokens.slice(0, -1).map((t) => t.trim()).filter(Boolean);
+      onChange([...prefix, s].join(", "));
+    } else {
+      onChange(s);
+    }
     setOpen(false);
     setActive(-1);
   };

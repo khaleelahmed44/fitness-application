@@ -1,7 +1,7 @@
 import type { Vehicle } from "@/types/database";
 
 export type ExportFormat = "pdf" | "xlsx" | "docx";
-export type ExportTab = "pending" | "passed";
+export type ExportTab = "all" | "pending" | "passed";
 
 export interface ExportColumn {
   header: string;
@@ -11,6 +11,7 @@ export interface ExportColumn {
 }
 
 export const TAB_TITLES: Record<ExportTab, string> = {
+  all: "Vehicle Fitness Register – Complete Report",
   pending: "Pending Inspection Queue",
   passed: "Verified / Passed Vehicles",
 };
@@ -37,19 +38,21 @@ export const fileStamp = (): string => new Date().toISOString().slice(0, 10);
 export const safeName = (s: string): string =>
   s.replace(/[^a-zA-Z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "record";
 
-export function exportColumns(tab: ExportTab): ExportColumn[] {
-  const base: ExportColumn[] = [
+/** One unified column set: every record, verified or not, in a single table. */
+export function exportColumns(_tab?: ExportTab): ExportColumn[] {
+  return [
     { header: "S.No", width: 8, get: (v) => String(v.id) },
     { header: "Vehicle No", width: 18, get: (v) => v.registration_no },
-    { header: "Document (Original Submitted)", width: 18, get: (v) => v.document_status },
+    { header: "Documents Original Submitted", width: 38, get: (v) => v.document_status },
     { header: "Date of Entry", width: 15, get: (v) => fmtDate(v.date_of_entry) },
     { header: "District", width: 18, get: (v) => v.district ?? "" },
     { header: "Traffic Station", width: 22, get: (v) => v.traffic_station ?? "" },
     { header: "Name (Collected By)", width: 22, get: (v) => v.collected_by_or_operator_name },
-  ];
-  if (tab === "pending") return base;
-  return [
-    ...base,
+    {
+      header: "Verification Status",
+      width: 18,
+      get: (v) => (v.status === "passed" ? "Verified" : "Not Verified"),
+    },
     { header: "Certificate No", width: 20, get: (v) => v.certificate_no ?? "" },
     { header: "Verified By", width: 22, get: (v) => v.verified_by_name ?? "" },
     { header: "Verified On", width: 15, get: (v) => fmtDate(v.verified_at) },
@@ -68,7 +71,7 @@ export function certificateRows(v: Vehicle): [string, string][] {
   const { issued, expiry } = certificateDates(v);
   return [
     ["Vehicle No", v.registration_no],
-    ["Original Documents Submitted", v.document_status],
+    ["Documents Original Submitted", v.document_status || "—"],
     ["Date of Entry", fmtDate(v.date_of_entry)],
     ["District", v.district ?? "—"],
     ["Traffic Station", v.traffic_station ?? "—"],
@@ -83,12 +86,12 @@ export function recordRows(v: Vehicle): [string, string][] {
   const rows: [string, string][] = [
     ["S.No", String(v.id)],
     ["Vehicle No", v.registration_no],
-    ["Document (Original Submitted)", v.document_status],
+    ["Documents Original Submitted", v.document_status],
     ["Date of Entry", fmtDate(v.date_of_entry)],
     ["District", v.district ?? ""],
     ["Traffic Station", v.traffic_station ?? ""],
     ["Name (Collected By)", v.collected_by_or_operator_name],
-    ["Status", v.status.toUpperCase()],
+    ["Verification Status", v.status === "passed" ? "Verified" : "Not Verified"],
   ];
   if (v.verified_by_name) rows.push(["Verified By", v.verified_by_name]);
   if (v.verified_at) rows.push(["Verified On", fmtDate(v.verified_at)]);

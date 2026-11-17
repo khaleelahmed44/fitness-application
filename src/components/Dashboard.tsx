@@ -21,7 +21,7 @@ import {
   deleteVehicle,
   importVehicles,
   updateVehicle,
-  verifyVehicle,
+  setVerification,
   type ImportRow,
 } from "@/lib/vehicle-actions";
 import { exportList, exportRecord, type ExportFormat } from "@/lib/export";
@@ -41,12 +41,12 @@ interface Props {
 }
 
 const TAB_LABELS: Record<TabKey, string> = {
-  pending: "Pending Queue",
+  pending: "Pending / Not Verified",
   passed: "Verified / Passed",
 };
 
 const EMPTY_TEXT: Record<TabKey, string> = {
-  pending: "No vehicles are waiting. Add a new entry to get started.",
+  pending: "No unverified vehicles. Add a new entry to get started.",
   passed: "No vehicles have been verified yet.",
 };
 
@@ -54,7 +54,7 @@ type Dialog =
   | { kind: "new" }
   | { kind: "edit"; vehicle: Vehicle }
   | { kind: "delete"; vehicle: Vehicle }
-  | { kind: "verify"; vehicle: Vehicle }
+  | { kind: "verify"; vehicle: Vehicle; to: boolean }
   | { kind: "import" }
   | null;
 
@@ -141,13 +141,18 @@ export default function Dashboard({ profile, initialVehicles }: Props) {
     }
   };
 
-  const handleVerify = async (v: Vehicle) => {
+  const handleSetVerified = async (v: Vehicle, verified: boolean) => {
     setBusyId(v.id);
     try {
-      const updated = await verifyVehicle(supabase, v.id);
+      const updated = await setVerification(supabase, v.id, verified);
       upsertLocal(updated);
-      setTab("passed");
-      flash("ok", `Verified. Certificate ${updated.certificate_no} issued.`);
+      setTab(verified ? "passed" : "pending");
+      flash(
+        "ok",
+        verified
+          ? `Verified. Certificate ${updated.certificate_no} issued.`
+          : `${updated.registration_no} marked Not Verified and moved back to Pending.`
+      );
     } catch (err) {
       await refresh();
       throw err;
@@ -168,7 +173,9 @@ export default function Dashboard({ profile, initialVehicles }: Props) {
 
   const handleExportList = async (format: ExportFormat) => {
     try {
-      await exportList(format, tab, rows);
+      // One unified file with every record (not just the visible tab / search)
+      const all = [...vehicles].sort((a, b) => a.id - b.id);
+      await exportList(format, "all", all);
     } catch (err) {
       flash("err", err instanceof Error ? err.message : "Export failed");
     }
@@ -176,7 +183,7 @@ export default function Dashboard({ profile, initialVehicles }: Props) {
 
   const handleExportRecord = async (v: Vehicle, format: ExportFormat) => {
     try {
-      await exportRecord(format, v.status, v);
+      await exportRecord(format, "all", v);
     } catch (err) {
       flash("err", err instanceof Error ? err.message : "Export failed");
     }
@@ -228,6 +235,7 @@ export default function Dashboard({ profile, initialVehicles }: Props) {
   const suggest = useMemo(() => {
     const fields: SuggestField[] = [
       "registration_no",
+      "document_status",
       "district",
       "traffic_station",
       "collected_by_or_operator_name",
@@ -241,10 +249,11 @@ export default function Dashboard({ profile, initialVehicles }: Props) {
   const columns = useMemo(
     () =>
       buildColumns(tab, {
-        canVerify: verifier,
         canModify: (v) => canModify(v, profile.id, profile.role),
+        canToggle: (v) =>
+          verifier && (v.status === "pending" || canModify(v, profile.id, profile.role)),
         busyId,
-        onVerify: (v) => setDialog({ kind: "verify", vehicle: v }),
+        onToggleVerify: (v) => setDialog({ kind: "verify", vehicle: v, to: v.status !== "passed" }),
         onEdit: (v) => setDialog({ kind: "edit", vehicle: v }),
         onDelete: (v) => setDialog({ kind: "delete", vehicle: v }),
         onExport: handleExportRecord,
@@ -464,7 +473,7 @@ export default function Dashboard({ profile, initialVehicles }: Props) {
                     <FileUp className="h-4 w-4" />
                     <span className="hidden sm:inline">Import Excel</span>
                   </button>
-                  <ExportMenu count={rows.length} onExport={handleExportList} />
+                  <ExportMenu count={vehicles.length} onExport={handleExportList} />
                 </>
               }
             />
@@ -523,15 +532,24 @@ export default function Dashboard({ profile, initialVehicles }: Props) {
         {dialog?.kind === "verify" && (
           <ConfirmModal
             key="verify"
-            title="Verify vehicle and issue certificate?"
+            danger={!dialog.to}
+            title={dialog.to ? "Mark as Verified?" : "Mark as Not Verified?"}
             message={
-              <>
-                Mark <b>{dialog.vehicle.registration_no}</b> as verified. A certificate number is
-                generated and the record moves to the Verified / Passed list under your name.
-              </>
+              dialog.to ? (
+                <>
+                  Mark <b>{dialog.vehicle.registration_no}</b> as <b>Verified</b>. A certificate number is
+                  generated and the record moves to the Verified / Passed list under your name.
+                </>
+              ) : (
+                <>
+                  Mark <b>{dialog.vehicle.registration_no}</b> as <b>Not Verified</b>. Its certificate
+                  ({dialog.vehicle.certificate_no}) is withdrawn and the record returns to the Pending
+                  list.
+                </>
+              )
             }
-            confirmLabel="Verify & issue"
-            onConfirm={() => handleVerify(dialog.vehicle)}
+            confirmLabel={dialog.to ? "Mark Verified" : "Mark Not Verified"}
+            onConfirm={() => handleSetVerified(dialog.vehicle, dialog.to)}
             onClose={() => setDialog(null)}
           />
         )}

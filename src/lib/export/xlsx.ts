@@ -27,6 +27,9 @@ export async function exportXlsx(
     ws.addRow(record);
   }
 
+  ws.eachRow((row: any) => {
+    row.alignment = { vertical: "top", wrapText: true };
+  });
   const header = ws.getRow(1);
   header.font = { bold: true, color: { argb: "FFFFFFFF" } };
   header.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF1E3A8A" } };
