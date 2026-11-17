@@ -264,5 +264,5 @@ export async function parseVehicleFile(file: File): Promise<ParseResult> {
 
 export const TEMPLATE_CSV =
   "Vehicle No,Documents Original Submitted,Date of Entry,District,Traffic Station,Name\r\n" +
-  "LEA-1234,"CNIC, Original Registration Book, Fitness Form",17/11/2026,Lahore,Model Town,Ali Raza\r\n" +
+  'LEA-1234,"CNIC, Original Registration Book, Fitness Form",17/11/2026,Lahore,Model Town,Ali Raza\r\n' +
   "LEB-5678,CNIC,17/11/2026,Kasur,City Station,Usman Khan\r\n";
