@@ -15,6 +15,7 @@ import {
   Plus,
   ShieldCheck,
   Truck,
+  Users,
   X,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
@@ -34,7 +35,7 @@ import EntryModal from "./EntryModal";
 import ImportModal from "./ImportModal";
 import ConfirmModal from "./ConfirmModal";
 import VerifyModal from "./VerifyModal";
-import ExportMenu from "./ExportMenu";
+import ExportMenu, { type ExportScope } from "./ExportMenu";
 import AnimatedNumber from "./AnimatedNumber";
 import { buildColumns, type TabKey } from "./columns";
 
@@ -174,11 +175,12 @@ export default function Dashboard({ profile, initialVehicles }: Props) {
     return res;
   };
 
-  const handleExportList = async (format: ExportFormat) => {
+  const handleExportList = async (scope: ExportScope, format: ExportFormat) => {
     try {
-      // One unified file with every record (not just the visible tab / search)
-      const all = [...vehicles].sort((a, b) => a.id - b.id);
-      await exportList(format, "all", all);
+      const sorted = [...vehicles].sort((a, b) => a.id - b.id);
+      const tab = scope === "verified" ? "passed" : scope === "pending" ? "pending" : "all";
+      const subset = sorted.filter((v) => (tab === "all" ? true : v.status === tab));
+      await exportList(format, tab, subset);
     } catch (err) {
       flash("err", err instanceof Error ? err.message : "Export failed");
     }
@@ -322,6 +324,15 @@ export default function Dashboard({ profile, initialVehicles }: Props) {
             className="flex w-full items-center gap-2.5 rounded-xl px-3.5 py-2.5 text-sm font-medium text-amber-200 transition hover:bg-white/5 hover:text-amber-100"
           >
             <Settings2 className="h-4 w-4" /> Admin Panel
+          </Link>
+        )}
+
+        {profile.role === "inspector" && (
+          <Link
+            href="/team"
+            className="flex w-full items-center gap-2.5 rounded-xl px-3.5 py-2.5 text-sm font-medium text-indigo-100/70 transition hover:bg-white/5 hover:text-white"
+          >
+            <Users className="h-4 w-4" /> My Team
           </Link>
         )}
 
@@ -485,7 +496,10 @@ export default function Dashboard({ profile, initialVehicles }: Props) {
                     <FileUp className="h-4 w-4" />
                     <span className="hidden sm:inline">Import Excel</span>
                   </button>
-                  <ExportMenu count={vehicles.length} onExport={handleExportList} />
+                  <ExportMenu
+                    counts={{ all: counts.total, verified: counts.passed, pending: counts.pending }}
+                    onExport={handleExportList}
+                  />
                 </>
               }
             />

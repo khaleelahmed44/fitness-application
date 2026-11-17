@@ -3,15 +3,16 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { Loader2, Lock, Mail, ShieldCheck } from "lucide-react";
+import { Loader2, Lock, ShieldCheck, User } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import { usernameToEmail } from "@/lib/auth";
 
 const fieldClass =
   "w-full rounded-xl border border-slate-200 bg-white py-2.5 pl-10 pr-3 text-sm outline-none transition placeholder:text-slate-400 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100";
 
 export default function LoginPage() {
   const router = useRouter();
-  const [email, setEmail] = useState("");
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -22,8 +23,8 @@ export default function LoginPage() {
     setLoading(true);
     const supabase = createClient();
 
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) setError(error.message === "Invalid login credentials" ? "Incorrect email or password." : error.message);
+    const { error } = await supabase.auth.signInWithPassword({ email: usernameToEmail(username), password });
+    if (error) setError(error.message === "Invalid login credentials" ? "Incorrect username or password." : error.message);
     else {
       router.replace("/");
       router.refresh();
@@ -55,19 +56,19 @@ export default function LoginPage() {
           </motion.div>
           <h1 className="mt-4 text-xl font-bold text-slate-900">Vehicle Fitness Register</h1>
           <p className="mt-1 text-sm text-slate-500">
-            Sign in with the account issued by your administrator
+            Sign in with your username and password
           </p>
         </div>
 
         <div className="relative">
-          <Mail className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+          <User className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
           <input
-            type="email"
             required
-            autoComplete="email"
-            placeholder="Email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
+            autoComplete="username"
+            autoCapitalize="none"
+            placeholder="Username"
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
             className={fieldClass}
           />
         </div>
@@ -95,7 +96,7 @@ export default function LoginPage() {
         </button>
 
         <p className="text-center text-xs text-slate-500">
-          Accounts are created by the administrator. Self-registration is disabled.
+          Accounts are issued by your administrator or inspector. No email or OTP needed.
         </p>
       </motion.form>
     </main>

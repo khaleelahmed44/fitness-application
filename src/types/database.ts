@@ -1,9 +1,10 @@
-export type Role = "operator" | "inspector" | "admin";
+export type Role = "assistant" | "inspector" | "admin";
 export type VehicleStatus = "pending" | "passed";
 
 export interface Profile {
   id: string;
   email: string | null;
+  username: string;
   full_name: string | null;
   role: Role;
   created_at: string;
@@ -46,7 +47,7 @@ export interface VehicleInput {
 export const canVerify = (role: Role | undefined): boolean =>
   role === "inspector" || role === "admin";
 
-/** Edit rule (mirrors RLS): admin and inspectors any record; operators only their own pending rows. */
+/** Edit rule (mirrors RLS): admin and inspectors any record; assistants only their own pending rows. */
 export function canEdit(v: Vehicle, userId: string, role: Role): boolean {
   if (role === "admin" || role === "inspector") return true;
   return v.status === "pending" && v.created_by === userId;
@@ -57,9 +58,10 @@ export const canDelete = (role: Role | undefined): boolean => role === "admin";
 
 export interface ManagedUser {
   id: string;
-  email: string | null;
+  username: string;
   full_name: string | null;
   role: Role;
+  created_by_name: string | null;
   created_at: string;
   last_sign_in_at: string | null;
   entries: number;
@@ -75,7 +77,7 @@ export interface AdminStats {
   trash: number;
   admins: number;
   inspectors: number;
-  operators: number;
+  assistants: number;
   last_entry_at: string | null;
   last_verified_at: string | null;
   db_size: string;

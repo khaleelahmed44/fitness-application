@@ -22,7 +22,8 @@ import {
   Truck,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
-import type { AdminStats, ManagedUser, TrashRow } from "@/types/database";
+import type { AdminStats, TrashRow } from "@/types/database";
+import UserManager from "./UserManager";
 import AnimatedNumber from "./AnimatedNumber";
 import ConfirmModal from "./ConfirmModal";
 import Modal from "./Modal";
@@ -41,8 +42,6 @@ const fmtDateTime = (iso: string | null) =>
     : "—";
 
 type Dialog =
-  | { kind: "removeUser"; user: ManagedUser }
-  | { kind: "resetPw"; user: ManagedUser }
   | { kind: "purgeOne"; row: TrashRow }
   | { kind: "purgeAll" }
   | null;
@@ -55,7 +54,6 @@ export default function AdminPanel({ adminName }: { adminName: string }) {
   const supabase = useMemo(() => createClient(), []);
   const [section, setSection] = useState<Section>("monitor");
   const [stats, setStats] = useState<AdminStats | null>(null);
-  const [users, setUsers] = useState<ManagedUser[]>([]);
   const [trash, setTrash] = useState<TrashRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [dialog, setDialog] = useState<Dialog>(null);
@@ -67,9 +65,8 @@ export default function AdminPanel({ adminName }: { adminName: string }) {
   }, []);
 
   const load = useCallback(async () => {
-    const [s, u, t] = await Promise.all([
+    const [s, t] = await Promise.all([
       supabase.rpc("admin_stats"),
-      supabase.rpc("admin_list_users"),
       supabase
         .from("vehicles_trash")
         .select(
@@ -77,11 +74,10 @@ export default function AdminPanel({ adminName }: { adminName: string }) {
         )
         .order("deleted_at", { ascending: false }),
     ]);
-    const err = s.error ?? u.error ?? t.error;
+    const err = s.error ?? t.error;
     if (err) flash("err", err.message);
     else {
       setStats(s.data as AdminStats);
-      setUsers((u.data ?? []) as ManagedUser[]);
       setTrash((t.data ?? []) as TrashRow[]);
     }
     setLoading(false);
@@ -119,7 +115,7 @@ export default function AdminPanel({ adminName }: { adminName: string }) {
 
   const tabs: { key: Section; label: string; Icon: typeof Users }[] = [
     { key: "monitor", label: "Monitoring", Icon: Activity },
-    { key: "users", label: "Users & Inspectors", Icon: Users },
+    { key: "users", label: "Inspectors & Users", Icon: Users },
     { key: "trash", label: `Recycle Bin (${trash.length})`, Icon: Trash2 },
   ];
 
@@ -231,7 +227,7 @@ export default function AdminPanel({ adminName }: { adminName: string }) {
                   {[
                     ["Super admin", stats.admins],
                     ["Inspectors", stats.inspectors],
-                    ["Data-entry operators", stats.operators],
+                    ["Assistants (data entry)", stats.assistants],
                   ].map(([k, v]) => (
                     <div key={k} className="flex justify-between gap-4 border-b border-slate-100 pb-2 last:border-0">
                       <dt className="text-slate-500">{k}</dt>
@@ -246,81 +242,7 @@ export default function AdminPanel({ adminName }: { adminName: string }) {
         )}
 
         {/* ---------- Users ---------- */}
-        {section === "users" && (
-          <div className="space-y-5">
-            <AddUserForm
-              onCreate={async (v) => {
-                await run(
-                  `${v.role === "inspector" ? "Inspector" : "Operator"} ${v.name} added.`,
-                  supabase.rpc("admin_create_user", {
-                    p_email: v.email,
-                    p_password: v.password,
-                    p_full_name: v.name,
-                    p_role: v.role,
-                  })
-                );
-              }}
-            />
-
-            <div className="overflow-x-auto rounded-2xl bg-white shadow-sm ring-1 ring-slate-200/70">
-              <table className="w-full min-w-[720px] text-sm">
-                <thead className="bg-slate-50 text-left text-[11px] uppercase tracking-wider text-slate-500">
-                  <tr>
-                    {["Name", "Email", "Role", "Entries", "Verified", "Last sign-in", "Actions"].map((h) => (
-                      <th key={h} className="px-4 py-2.5 font-semibold">
-                        {h}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {users.map((u) => (
-                    <tr key={u.id} className="border-t border-slate-100">
-                      <td className="px-4 py-2.5 font-medium text-slate-900">{u.full_name}</td>
-                      <td className="px-4 py-2.5 text-slate-600">{u.email}</td>
-                      <td className="px-4 py-2.5">
-                        <span
-                          className={`rounded-full px-2.5 py-0.5 text-xs font-semibold capitalize ${
-                            u.role === "admin"
-                              ? "bg-amber-100 text-amber-800"
-                              : u.role === "inspector"
-                                ? "bg-indigo-100 text-indigo-700"
-                                : "bg-slate-100 text-slate-600"
-                          }`}
-                        >
-                          {u.role === "admin" ? "Super admin" : u.role}
-                        </span>
-                      </td>
-                      <td className="px-4 py-2.5 tabular-nums">{u.entries}</td>
-                      <td className="px-4 py-2.5 tabular-nums">{u.verified}</td>
-                      <td className="px-4 py-2.5 text-slate-500">{fmtDateTime(u.last_sign_in_at)}</td>
-                      <td className="px-4 py-2.5">
-                        <div className="flex gap-1">
-                          <button
-                            onClick={() => setDialog({ kind: "resetPw", user: u })}
-                            title="Reset password"
-                            className="rounded-lg p-1.5 text-slate-500 hover:bg-slate-100 hover:text-slate-900"
-                          >
-                            <KeyRound className="h-4 w-4" />
-                          </button>
-                          {u.role !== "admin" && (
-                            <button
-                              onClick={() => setDialog({ kind: "removeUser", user: u })}
-                              title="Remove user"
-                              className="rounded-lg p-1.5 text-slate-500 hover:bg-rose-50 hover:text-rose-600"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </button>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )}
+        {section === "users" && <UserManager viewerRole="admin" flash={flash} />}
 
         {/* ---------- Recycle bin ---------- */}
         {section === "trash" && (
@@ -396,37 +318,6 @@ export default function AdminPanel({ adminName }: { adminName: string }) {
       </main>
 
       <AnimatePresence>
-        {dialog?.kind === "removeUser" && (
-          <ConfirmModal
-            key="rm"
-            danger
-            title="Remove this user?"
-            message={
-              <>
-                <b>{dialog.user.full_name}</b> ({dialog.user.email}) will lose access immediately. Their past
-                entries and verifications stay in the register.
-              </>
-            }
-            confirmLabel="Remove user"
-            onConfirm={() =>
-              run(`${dialog.user.full_name} removed.`, supabase.rpc("admin_delete_user", { p_id: dialog.user.id }))
-            }
-            onClose={() => setDialog(null)}
-          />
-        )}
-        {dialog?.kind === "resetPw" && (
-          <ResetPasswordModal
-            key="pw"
-            user={dialog.user}
-            onSubmit={(pw) =>
-              run(
-                `Password updated for ${dialog.user.full_name}.`,
-                supabase.rpc("admin_set_password", { p_id: dialog.user.id, p_password: pw })
-              )
-            }
-            onClose={() => setDialog(null)}
-          />
-        )}
         {dialog?.kind === "purgeOne" && (
           <ConfirmModal
             key="p1"
@@ -471,132 +362,5 @@ export default function AdminPanel({ adminName }: { adminName: string }) {
         )}
       </AnimatePresence>
     </div>
-  );
-}
-
-function AddUserForm({
-  onCreate,
-}: {
-  onCreate: (v: { name: string; email: string; password: string; role: "inspector" | "operator" }) => Promise<void>;
-}) {
-  const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [role, setRole] = useState<"inspector" | "operator">("inspector");
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  async function submit(e: React.FormEvent) {
-    e.preventDefault();
-    setBusy(true);
-    setError(null);
-    try {
-      await onCreate({ name, email, password, role });
-      setName("");
-      setEmail("");
-      setPassword("");
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not add user.");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return (
-    <form onSubmit={submit} className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200/70">
-      <h2 className="mb-4 flex items-center gap-2 text-sm font-semibold text-slate-900">
-        <UserPlus className="h-4 w-4 text-indigo-600" /> Add an inspector or operator
-      </h2>
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-        <input className={input} placeholder="Full name" required value={name} onChange={(e) => setName(e.target.value)} />
-        <input
-          className={input}
-          type="email"
-          placeholder="Email"
-          required
-          autoComplete="off"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-        />
-        <input
-          className={input}
-          type="text"
-          placeholder="Password (min 8)"
-          required
-          minLength={8}
-          autoComplete="off"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-        />
-        <select className={input} value={role} onChange={(e) => setRole(e.target.value as "inspector" | "operator")}>
-          <option value="inspector">Inspector (verify + edit)</option>
-          <option value="operator">Operator (data entry)</option>
-        </select>
-        <button
-          disabled={busy}
-          className="inline-flex items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-60"
-        >
-          {busy && <Loader2 className="h-4 w-4 animate-spin" />} Add user
-        </button>
-      </div>
-      {error && <p className="mt-3 rounded-xl bg-rose-50 p-3 text-sm text-rose-700">{error}</p>}
-      <p className="mt-3 text-xs text-slate-400">
-        Share the email and password with the person; they can sign in straight away. Only you can add or remove users.
-      </p>
-    </form>
-  );
-}
-
-function ResetPasswordModal({
-  user,
-  onSubmit,
-  onClose,
-}: {
-  user: ManagedUser;
-  onSubmit: (pw: string) => Promise<void>;
-  onClose: () => void;
-}) {
-  const [pw, setPw] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  async function submit(e: React.FormEvent) {
-    e.preventDefault();
-    setBusy(true);
-    setError(null);
-    try {
-      await onSubmit(pw);
-      onClose();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not update password.");
-      setBusy(false);
-    }
-  }
-
-  return (
-    <Modal title="Reset password" subtitle={`${user.full_name} (${user.email})`} onClose={onClose}>
-      <form onSubmit={submit} className="space-y-4">
-        <input
-          className={input}
-          type="text"
-          placeholder="New password (min 8 characters)"
-          minLength={8}
-          required
-          autoFocus
-          autoComplete="off"
-          value={pw}
-          onChange={(e) => setPw(e.target.value)}
-        />
-        {error && <p className="rounded-xl bg-rose-50 p-3 text-sm text-rose-700">{error}</p>}
-        <div className="flex justify-end gap-2">
-          <button type="button" onClick={onClose} className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
-            Cancel
-          </button>
-          <button disabled={busy} className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-60">
-            {busy && <Loader2 className="h-4 w-4 animate-spin" />} Update password
-          </button>
-        </div>
-      </form>
-    </Modal>
   );
 }

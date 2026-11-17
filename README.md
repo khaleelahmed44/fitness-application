@@ -46,17 +46,22 @@ src/
 *Date of Entry* (DD/MM/YYYY, optional), *District*, *Traffic Station*, *Name*. A preview shows valid and skipped rows
 (missing vehicle no, duplicates, already pending). Limits: 5 MB, 2,000 rows. "Download template" gives a sample.
 
-**Export all**: one unified file containing every record (Pending / Not Verified and Verified together, with a Verification Status column) as **PDF**, **Excel (.xlsx)** or **Word (.docx)**. Verified rows also have per-row e-certificate downloads.
+**Export toolbar** (Excel `.xlsx`, Word `.docx`, PDF): *Export all* (one unified file, Verification Status column), *Verified only*, *Non-verified only*. Every row also has its own PDF / Excel / Word download button (verified rows download the e-certificate).
 
-## Roles & security
+## Roles & security (3 tiers, username + password, no email OTP)
 
-- **Super admin** (exactly one, enforced by a unique index; cannot be removed): the only role that can open the Admin Panel (`/admin`), add / remove inspectors and operators, reset passwords, monitor the database, and **delete** records (deleted rows go to a recycle bin and can be restored or purged).
-- **Inspector**: sees every record, can **edit any field** and switch **Verified / Not Verified** (certificate number is issued by the database on Verify, withdrawn on Not Verified).
-- **Operator** (data entry): adds records and edits only their own pending ones.
-- **No self-registration**: accounts are created only by the admin (`admin_create_user`). Anyone who signs up through the raw Auth API gets no profile and therefore no access to any data.
-- Everything is enforced in Postgres (RLS + `SECURITY DEFINER` functions that re-check `app_role() = 'admin'`), not only in the browser.
-- **Super admin password**: not stored in this repo. Set / reset it in Supabase, e.g. in the SQL editor:
-  `update auth.users set encrypted_password = extensions.crypt('NEW-PASSWORD', extensions.gen_salt('bf')) where email = 'admin@example.com';`
+- **Super Admin** (exactly one, enforced by a unique index; cannot be removed): opens the Admin Panel (`/admin`), adds / removes inspectors, resets passwords, monitors all data and users, and is the only role that can **delete** records (they go to a recycle bin: restore or purge).
+- **Inspector** (created by the Admin): sees every record, edits any field, toggles **Verify / Unverify** (certificate number issued on Verify, withdrawn on Unverify), and manages their own Assistants at `/team`.
+- **Assistant / Data Entry** (created by an Inspector): manual entries, edits their own pending rows, Import and Export.
+- **Login** is a plain username + password. Internally a username maps to a never-mailed address `<username>@vehicle.local` (spaces become dots). Users are created pre-confirmed, so no email is ever sent.
+- **No self-registration**: accounts exist only through the `create_user` RPC (Admin creates Inspectors, Inspectors create Assistants). Anyone calling the raw Auth API gets no profile and no data access.
+- Everything is enforced in Postgres (RLS + `SECURITY DEFINER` functions + triggers), not only in the browser.
+- **Super Admin seed / password**: not stored in this repo. Reset it in the Supabase SQL editor:
+  `update auth.users set encrypted_password = extensions.crypt('NEW-PASSWORD', extensions.gen_salt('bf')) where email = 'khaleel.ahmed@vehicle.local';`
+
+## Database setup
+
+Run `supabase/migrations/001` … `006` in order in the SQL editor (006 = three-tier roles and username login). Then seed the single admin by creating an auth user and setting `profiles.role = 'admin'`.
 
 ## Run locally
 
@@ -73,26 +78,19 @@ src/
 
 ## Create roles and test
 
-1. Sign up two accounts at `/login`: `operator@test.com` and `inspector@test.com`.
-2. Promote the inspector in the SQL editor:
-   ```sql
-   update public.profiles
-   set role = 'inspector', full_name = 'Inspector Ali'
-   where email = 'inspector@test.com';
-   ```
-   (Use `'admin'` for admins.) Sign out and in again.
-3. As **operator**: click **+ New Entry**, add a vehicle. Only the Pending sheet is shown, with no Pass/Fail buttons.
-4. As **inspector**: set the vehicle's Documents cell to *Verified*, click **Pass** → certificate is issued and the row moves to **Passed Vehicles**. Click **Print / View Certificate** → print or "Save as PDF".
-5. Add another vehicle and click **Fail** with a reason → it appears in **Failed Vehicles** with the remarks.
-6. Security check: as operator, run `await supabase.from('vehicles').update({status:'passed'}).eq('status','pending')` in the browser console. It must affect 0 rows or error.
+1. Log in as the Super Admin → **Admin Panel → Inspectors & Users** → create an Inspector (username + password).
+2. Log in as that Inspector → **My Team** → create an Assistant.
+3. As the Assistant: **+ New Entry** or **Import**; the row appears under Pending / Not Verified.
+4. As the Inspector: click **Verify** (enter who collected) → the row moves to Verified with a certificate; **Unverify** moves it back.
+5. Use **Export** for All / Verified only / Non-verified only in Excel, Word or PDF.
+6. Security check: as the Assistant, `await supabase.from('vehicles').update({status:'passed'}).eq('status','pending')` in the console must affect 0 rows or error.
 
 ## Deploy for free
 
 1. Push the project to GitHub (`.env.local` is git-ignored).
 2. Go to https://vercel.com → Add New Project → import the repo (Hobby plan is free).
 3. Add environment variables from `.env.local` (all `NEXT_PUBLIC_*`).
-4. Deploy. In Supabase → Authentication → URL Configuration, set Site URL to your Vercel URL.
-5. For production, turn "Confirm email" back on.
+4. Deploy. No email settings are needed: login is username + password.
 
 ## Notes / assumptions
 

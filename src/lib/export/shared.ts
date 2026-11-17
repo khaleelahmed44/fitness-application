@@ -12,8 +12,8 @@ export interface ExportColumn {
 
 export const TAB_TITLES: Record<ExportTab, string> = {
   all: "Vehicle Fitness Register – Complete Report",
-  pending: "Pending Inspection Queue",
-  passed: "Verified / Passed Vehicles",
+  pending: "Non-Verified (Pending) Vehicles",
+  passed: "Verified Vehicles",
 };
 
 export const authorityName = () =>

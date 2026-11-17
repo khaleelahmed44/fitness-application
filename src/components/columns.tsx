@@ -200,7 +200,5 @@ export function buildColumns(tab: TabKey, o: Options): ColumnDef<Vehicle, any>[]
     })
   );
 
-  // Per-row downloads are e-certificates, so only verified rows get them.
-  // The Export button gives the single unified file for everything else.
-  return tab === "passed" ? cols : cols.filter((c) => c.id !== "download");
+  return cols;
 }

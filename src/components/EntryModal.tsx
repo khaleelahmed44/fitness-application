@@ -120,7 +120,7 @@ export default function EntryModal({ mode, initial, defaultName, suggest, onSubm
           />
           <div className="sm:col-span-2">
             <SuggestInput
-              label="Name (collected by / operator)"
+              label="Name (data entry / collected by)"
               value={name}
               onChange={setName}
               suggestions={suggest.collected_by_or_operator_name}
