@@ -88,7 +88,7 @@ function parseDate(v: string): string | null {
       m = Number(dmy[2]);
       y = Number(dmy[3]);
       if (y < 100) y += 2000;
-    } else if (/^\d{5}$/.test(s)) {
+    } else if (/^\d{5}(\.\d+)?$/.test(s)) {
       const dt = new Date(Math.round((Number(s) - 25569) * 86400 * 1000));
       return Number.isNaN(dt.getTime()) ? null : dt.toISOString().slice(0, 10);
     } else return null;
@@ -153,7 +153,7 @@ function parseCsv(text: string): RawRow[] {
   return rows;
 }
 
-async function readXlsx(buffer: ArrayBuffer): Promise<RawRow[]> {
+async function readXlsxExcelJs(buffer: ArrayBuffer): Promise<RawRow[]> {
   const mod = await import("exceljs");
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const ExcelJS: any = (mod as any).default ?? mod;
@@ -178,6 +178,17 @@ async function readXlsx(buffer: ArrayBuffer): Promise<RawRow[]> {
     out.push({ line: rowNumber, cells: Array.from(arr, (c) => cellToString(c)) });
   });
   return out;
+}
+
+/** Primary reader is dependency-free; ExcelJS is only the fallback for unusual workbooks. */
+async function readXlsx(buffer: ArrayBuffer): Promise<RawRow[]> {
+  try {
+    const rows = await (await import("./xlsx-native")).readXlsxNative(buffer);
+    if (rows.length > 0) return rows;
+  } catch {
+    /* fall through to ExcelJS */
+  }
+  return readXlsxExcelJs(buffer);
 }
 
 // ---- main entry ---------------------------------------------------------
