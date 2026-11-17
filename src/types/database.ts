@@ -46,16 +46,50 @@ export interface VehicleInput {
 export const canVerify = (role: Role | undefined): boolean =>
   role === "inspector" || role === "admin";
 
-/** Edit rule (mirrors RLS): admin; verified rows: any inspector; pending rows: creator or inspector. */
+/** Edit rule (mirrors RLS): admin and inspectors any record; operators only their own pending rows. */
 export function canEdit(v: Vehicle, userId: string, role: Role): boolean {
-  if (role === "admin") return true;
-  if (v.status === "passed") return role === "inspector";
-  return v.created_by === userId || role === "inspector";
+  if (role === "admin" || role === "inspector") return true;
+  return v.status === "pending" && v.created_by === userId;
 }
 
-/** Delete rule (mirrors RLS, stricter than edit): verified rows only by their verifier. */
-export function canModify(v: Vehicle, userId: string, role: Role): boolean {
-  if (role === "admin") return true;
-  if (v.status === "pending") return v.created_by === userId || role === "inspector";
-  return v.verified_by === userId;
+/** Delete / recycle: super admin only (mirrors RLS). */
+export const canDelete = (role: Role | undefined): boolean => role === "admin";
+
+export interface ManagedUser {
+  id: string;
+  email: string | null;
+  full_name: string | null;
+  role: Role;
+  created_at: string;
+  last_sign_in_at: string | null;
+  entries: number;
+  verified: number;
+}
+
+export interface AdminStats {
+  total: number;
+  pending: number;
+  verified: number;
+  today: number;
+  last7: number;
+  trash: number;
+  admins: number;
+  inspectors: number;
+  operators: number;
+  last_entry_at: string | null;
+  last_verified_at: string | null;
+  db_size: string;
+  table_size: string;
+}
+
+export interface TrashRow {
+  trash_id: number;
+  deleted_at: string;
+  deleted_by_name: string | null;
+  id: number;
+  registration_no: string | null;
+  status: string | null;
+  district: string | null;
+  traffic_station: string | null;
+  collected_by_or_operator_name: string | null;
 }

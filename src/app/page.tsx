@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import Dashboard from "@/components/Dashboard";
+import NoAccess from "@/components/NoAccess";
 import type { Profile, Vehicle } from "@/types/database";
 
 export const dynamic = "force-dynamic";
@@ -18,16 +19,7 @@ export default async function HomePage() {
     .eq("id", user.id)
     .single<Profile>();
 
-  if (!profile) {
-    return (
-      <main className="grid min-h-screen place-items-center p-6">
-        <p className="max-w-md rounded bg-white p-6 text-center shadow">
-          Your profile has not been created yet. Please sign out and sign in again, or
-          contact an administrator.
-        </p>
-      </main>
-    );
-  }
+  if (!profile) return <NoAccess email={user.email ?? ""} />;
 
   // RLS: only signed-in users with a profile can read the register.
   const { data: vehicles } = await supabase

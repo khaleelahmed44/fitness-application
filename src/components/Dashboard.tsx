@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
 import {
@@ -9,6 +10,7 @@ import {
   ClipboardList,
   FileUp,
   LogOut,
+  Settings2,
   Menu,
   Plus,
   ShieldCheck,
@@ -26,7 +28,7 @@ import {
 } from "@/lib/vehicle-actions";
 import { exportList, exportRecord, type ExportFormat } from "@/lib/export";
 import { suggestionsFor, type SuggestField } from "@/lib/suggestions";
-import { canEdit, canModify, canVerify, type Profile, type Vehicle, type VehicleInput } from "@/types/database";
+import { canDelete, canEdit, canVerify, type Profile, type Vehicle, type VehicleInput } from "@/types/database";
 import VehicleGrid from "./VehicleGrid";
 import EntryModal from "./EntryModal";
 import ImportModal from "./ImportModal";
@@ -251,7 +253,7 @@ export default function Dashboard({ profile, initialVehicles }: Props) {
     () =>
       buildColumns(tab, {
         canEdit: (v) => canEdit(v, profile.id, profile.role),
-        canDelete: (v) => canModify(v, profile.id, profile.role),
+        canDelete: () => canDelete(profile.role),
         canToggle: () => verifier,
         busyId,
         onToggleVerify: (v) => setDialog({ kind: "verify", vehicle: v, to: v.status !== "passed" }),
@@ -313,6 +315,15 @@ export default function Dashboard({ profile, initialVehicles }: Props) {
             </button>
           );
         })}
+
+        {profile.role === "admin" && (
+          <Link
+            href="/admin"
+            className="flex w-full items-center gap-2.5 rounded-xl px-3.5 py-2.5 text-sm font-medium text-amber-200 transition hover:bg-white/5 hover:text-amber-100"
+          >
+            <Settings2 className="h-4 w-4" /> Admin Panel
+          </Link>
+        )}
 
         <div className="pt-4">
           <button
@@ -520,9 +531,8 @@ export default function Dashboard({ profile, initialVehicles }: Props) {
             message={
               <>
                 <b>{dialog.vehicle.registration_no}</b> (S.No {dialog.vehicle.id}) will be removed
-                permanently
-                {dialog.vehicle.status === "passed" ? ", and its e-certificate will no longer be valid" : ""}.
-                This cannot be undone.
+                from the register{dialog.vehicle.status === "passed" ? " and its e-certificate will no longer be valid" : ""}. A
+                copy is kept in the Admin Panel recycle bin, so it can be restored.
               </>
             }
             confirmLabel="Delete"

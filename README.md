@@ -21,7 +21,7 @@ Workflow columns: `status` (pending / passed), `certificate_no`, `verified_by(_n
 
 ```
 supabase/migrations/001_init.sql            v1 tables, role helper, profiles
-supabase/migrations/002_notebook_schema.sql v2 register, triggers, RLS, realtime (run after 001)
+supabase/migrations/002–005                 notebook schema, free-text documents, verification toggle, super admin + user mgmt + recycle bin (run in order after 001)
 src/
   middleware.ts                             Session refresh + redirect to /login
   types/database.ts                         Vehicle / Profile / Role types, canModify()
@@ -48,14 +48,15 @@ src/
 
 **Export all**: one unified file containing every record (Pending / Not Verified and Verified together, with a Verification Status column) as **PDF**, **Excel (.xlsx)** or **Word (.docx)**. Verified rows also have per-row e-certificate downloads.
 
-## How security works
+## Roles & security
 
-- Everything is behind sign-in; the `anon` role has no access to `vehicles`. Row-Level Security is enforced in Postgres, not in the browser.
-- **View / add**: any signed-in user with a profile (new entries are forced to `pending` and owned by the creator).
-- **Edit / delete** (RLS `UPDATE` and `DELETE` policies): **admin** — any record; **pending** — its creator or any inspector; **verified** — any inspector can edit it, but only the inspector who verified it can delete it (admins always).
-- **Verification toggle** (Verified / Not Verified): inspectors / admins only (un-verifying a record follows the same edit rule). Certificate number, verifier and timestamp are set — or cleared — by the `vehicles_guard` trigger, so they cannot be forged.
-- Date of entry, creator and S.No are immutable. Roles are changed only via SQL, e.g.
-  `update public.profiles set role = 'inspector' where email = 'user@example.com';`
+- **Super admin** (exactly one, enforced by a unique index; cannot be removed): the only role that can open the Admin Panel (`/admin`), add / remove inspectors and operators, reset passwords, monitor the database, and **delete** records (deleted rows go to a recycle bin and can be restored or purged).
+- **Inspector**: sees every record, can **edit any field** and switch **Verified / Not Verified** (certificate number is issued by the database on Verify, withdrawn on Not Verified).
+- **Operator** (data entry): adds records and edits only their own pending ones.
+- **No self-registration**: accounts are created only by the admin (`admin_create_user`). Anyone who signs up through the raw Auth API gets no profile and therefore no access to any data.
+- Everything is enforced in Postgres (RLS + `SECURITY DEFINER` functions that re-check `app_role() = 'admin'`), not only in the browser.
+- **Super admin password**: not stored in this repo. Set / reset it in Supabase, e.g. in the SQL editor:
+  `update auth.users set encrypted_password = extensions.crypt('NEW-PASSWORD', extensions.gen_salt('bf')) where email = 'admin@example.com';`
 
 ## Run locally
 

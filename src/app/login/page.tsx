@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { Loader2, Lock, Mail, ShieldCheck, User } from "lucide-react";
+import { Loader2, Lock, Mail, ShieldCheck } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 
 const fieldClass =
@@ -11,42 +11,22 @@ const fieldClass =
 
 export default function LoginPage() {
   const router = useRouter();
-  const [mode, setMode] = useState<"signin" | "signup">("signin");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [fullName, setFullName] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const [info, setInfo] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
-    setInfo(null);
     setLoading(true);
     const supabase = createClient();
 
-    if (mode === "signin") {
-      const { error } = await supabase.auth.signInWithPassword({ email, password });
-      if (error) setError(error.message);
-      else {
-        router.replace("/");
-        router.refresh();
-      }
-    } else {
-      const { data, error } = await supabase.auth.signUp({
-        email,
-        password,
-        options: { data: { full_name: fullName } },
-      });
-      if (error) setError(error.message);
-      else if (data.session) {
-        router.replace("/");
-        router.refresh();
-      } else {
-        setInfo("Account created. Check your email to confirm, then sign in.");
-        setMode("signin");
-      }
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) setError(error.message === "Invalid login credentials" ? "Incorrect email or password." : error.message);
+    else {
+      router.replace("/");
+      router.refresh();
     }
     setLoading(false);
   }
@@ -75,22 +55,10 @@ export default function LoginPage() {
           </motion.div>
           <h1 className="mt-4 text-xl font-bold text-slate-900">Vehicle Fitness Register</h1>
           <p className="mt-1 text-sm text-slate-500">
-            {mode === "signin" ? "Sign in to continue" : "Create your account"}
+            Sign in with the account issued by your administrator
           </p>
         </div>
 
-        {mode === "signup" && (
-          <div className="relative">
-            <User className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-            <input
-              required
-              placeholder="Full name"
-              value={fullName}
-              onChange={(e) => setFullName(e.target.value)}
-              className={fieldClass}
-            />
-          </div>
-        )}
         <div className="relative">
           <Mail className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
           <input
@@ -108,9 +76,8 @@ export default function LoginPage() {
           <input
             type="password"
             required
-            minLength={8}
-            autoComplete={mode === "signin" ? "current-password" : "new-password"}
-            placeholder="Password (min 8 characters)"
+                        autoComplete="current-password"
+            placeholder="Password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             className={fieldClass}
@@ -118,23 +85,18 @@ export default function LoginPage() {
         </div>
 
         {error && <p className="rounded-xl bg-rose-50 p-3 text-sm text-rose-700">{error}</p>}
-        {info && <p className="rounded-xl bg-emerald-50 p-3 text-sm text-emerald-700">{info}</p>}
 
         <button
           disabled={loading}
           className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 py-3 text-sm font-semibold text-white shadow-lg shadow-indigo-600/30 transition hover:brightness-110 disabled:opacity-60"
         >
           {loading && <Loader2 className="h-4 w-4 animate-spin" />}
-          {mode === "signin" ? "Sign in" : "Create account"}
+          Sign in
         </button>
 
-        <button
-          type="button"
-          onClick={() => setMode(mode === "signin" ? "signup" : "signin")}
-          className="w-full text-sm font-medium text-indigo-600 hover:underline"
-        >
-          {mode === "signin" ? "Need an account? Sign up" : "Have an account? Sign in"}
-        </button>
+        <p className="text-center text-xs text-slate-500">
+          Accounts are created by the administrator. Self-registration is disabled.
+        </p>
       </motion.form>
     </main>
   );
