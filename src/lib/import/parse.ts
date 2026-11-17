@@ -158,8 +158,16 @@ async function readXlsx(buffer: ArrayBuffer): Promise<RawRow[]> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const ExcelJS: any = (mod as any).default ?? mod;
   const wb = new ExcelJS.Workbook();
-  await wb.xlsx.load(buffer);
-  const ws = wb.worksheets[0];
+  try {
+    await wb.xlsx.load(buffer);
+  } catch (err) {
+    // The Excel library failed on the file's internal structure (not on our column logic).
+    const detail = err instanceof Error ? err.message : String(err);
+    throw new Error(
+      `This Excel file could not be read (${detail}). Open it in Excel, use Save As > .xlsx (or .csv) and upload that copy.`
+    );
+  }
+  const ws = wb.worksheets.find((w: { rowCount?: number }) => (w?.rowCount ?? 0) > 0) ?? wb.worksheets[0];
   if (!ws) throw new Error("The workbook has no sheets.");
 
   const out: RawRow[] = [];
@@ -173,7 +181,10 @@ async function readXlsx(buffer: ArrayBuffer): Promise<RawRow[]> {
 }
 
 // ---- main entry ---------------------------------------------------------
-export async function parseVehicleFile(file: File): Promise<ParseResult> {
+export async function parseVehicleFile(file: File | null | undefined): Promise<ParseResult> {
+  if (!file || typeof file.name !== "string") {
+    throw new Error("No file selected. Choose an .xlsx or .csv file to import.");
+  }
   if (file.size > MAX_FILE_BYTES) {
     throw new Error("File is too large (maximum 5 MB).");
   }
@@ -193,7 +204,12 @@ export async function parseVehicleFile(file: File): Promise<ParseResult> {
   const rows = raw.filter((r) => r.cells.some((c) => c !== ""));
   if (rows.length === 0) throw new Error("The file is empty.");
 
-  const [header, ...data] = rows;
+  // The header row is the first of the top rows that contains a Vehicle No column
+  // (so a title line above the headers does not break the import).
+  let headerIdx = rows.slice(0, 10).findIndex((r) => findColumn(r.cells, "registration_no") >= 0);
+  if (headerIdx < 0) headerIdx = 0;
+  const header = rows[headerIdx];
+  const data = rows.slice(headerIdx + 1);
   const col = {
     registration_no: findColumn(header.cells, "registration_no"),
     document_status: findColumn(header.cells, "document_status"),
@@ -206,6 +222,11 @@ export async function parseVehicleFile(file: File): Promise<ParseResult> {
   if (col.registration_no < 0) {
     throw new Error(
       "Missing column: Vehicle No. The first row of the file must be a header row (see the template)."
+    );
+  }
+  if (col.collected_by_or_operator_name < 0) {
+    throw new Error(
+      "Missing column: Name (the data-entry / assistant who logged the entry). Add a NAME column to the header row (see the template)."
     );
   }
   if (data.length > MAX_IMPORT_ROWS) {
