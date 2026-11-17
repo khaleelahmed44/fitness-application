@@ -1,0 +1,11 @@
+# Copy these into a file named .env.local (local) and into Vercel → Settings → Environment Variables (live).
+# Never commit .env.local to GitHub.
+
+# REQUIRED (2)
+NEXT_PUBLIC_SUPABASE_URL=https://YOUR-PROJECT-REF.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=YOUR-ANON-PUBLIC-KEY
+
+# OPTIONAL (3) - certificate branding; defaults are used if omitted
+NEXT_PUBLIC_AUTHORITY_NAME=Vehicle Fitness Inspection Authority
+NEXT_PUBLIC_AUTHORITY_SUBTITLE=Government of Pakistan
+NEXT_PUBLIC_CERT_VALIDITY_MONTHS=12

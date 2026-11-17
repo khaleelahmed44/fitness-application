@@ -1,0 +1,43 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  background: #f3f4f6;
+  color: #111827;
+}
+
+/* ---------- Printable A4 certificate ---------- */
+.certificate-sheet {
+  width: 210mm;
+  min-height: 297mm;
+  background: #fff;
+}
+
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 0;
+  }
+
+  html,
+  body {
+    background: #fff !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .no-print {
+    display: none !important;
+  }
+
+  .certificate-sheet {
+    box-shadow: none !important;
+    margin: 0 !important;
+  }
+}
