@@ -29,6 +29,20 @@ src/
     certificate/[id]/page.tsx         Printable certificate
 ```
 
+## Import & export
+
+**Import from File** (button above the grid): upload an `.xlsx` or `.csv` with a header row containing
+*Registration No / Number Plate*, *Chassis No*, *Engine No* and optionally *Documents Status*
+(Verified / Pending). A preview shows valid rows and skipped rows (missing values, duplicates in the file,
+plates already pending); valid rows are inserted into the Pending queue. Limits: 5 MB, 2,000 rows per import.
+Use "Download template" in the dialog for a sample file.
+
+**Export** (button above the grid): downloads the rows currently shown in the active tab
+(respecting the search box) as **PDF**, **Excel (.xlsx)** or **Word (.docx)**.
+Each row also has PDF / XLSX / DOCX buttons: on the Passed tab, PDF and DOCX produce the e-certificate;
+on Pending / Failed they produce a record sheet. Exports only contain what the signed-in user's role is
+allowed to see (operators: pending only).
+
 ## How security works
 
 - **Operators** (default role for every sign-up): can INSERT vehicles (forced to `pending`) and SELECT pending rows only. They cannot update anything, and they cannot read passed/failed rows or certificates.

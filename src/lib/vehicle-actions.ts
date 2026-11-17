@@ -5,9 +5,10 @@ import type {
   Vehicle,
 } from "@/types/database";
 
+import { normaliseField as normalise } from "./normalise";
+
 export class ActionError extends Error {}
 
-const normalise = (v: string) => v.trim().replace(/\s+/g, " ").toUpperCase();
 
 /** Data-entry: insert a new vehicle. RLS forces status = 'pending'. */
 export async function addVehicle(
@@ -85,4 +86,64 @@ export async function setDocumentsStatus(
     .single();
   if (error) throw new ActionError(error.message);
   return data as Vehicle;
+}
+
+export interface ImportRow extends NewVehicleInput {
+  /** Row number in the uploaded file, used for error reporting */
+  line: number;
+}
+
+export interface ImportResult {
+  inserted: Vehicle[];
+  failed: { line: number; message: string }[];
+}
+
+/**
+ * Bulk-insert rows into the Pending queue (RLS forces status = 'pending').
+ * Inserts in chunks; if a chunk is rejected, falls back to row-by-row so one
+ * bad row does not block the rest.
+ */
+export async function importVehicles(
+  supabase: SupabaseClient,
+  rows: ImportRow[]
+): Promise<ImportResult> {
+  const inserted: Vehicle[] = [];
+  const failed: ImportResult["failed"] = [];
+  const CHUNK = 200;
+
+  for (let i = 0; i < rows.length; i += CHUNK) {
+    const chunk = rows.slice(i, i + CHUNK);
+    const payload = chunk.map((r) => ({
+      registration_no: normalise(r.registration_no),
+      chassis_no: normalise(r.chassis_no),
+      engine_no: normalise(r.engine_no),
+      documents_status: r.documents_status,
+      status: "pending",
+    }));
+
+    const { data, error } = await supabase.from("vehicles").insert(payload).select();
+    if (!error) {
+      inserted.push(...((data ?? []) as Vehicle[]));
+      continue;
+    }
+
+    // The failed batch inserted nothing (atomic) — retry one by one.
+    for (let j = 0; j < chunk.length; j++) {
+      const { data: one, error: err } = await supabase
+        .from("vehicles")
+        .insert(payload[j])
+        .select()
+        .single();
+      if (err) {
+        failed.push({
+          line: chunk[j].line,
+          message:
+            err.code === "23505" ? "Number plate is already in the pending queue" : err.message,
+        });
+      } else {
+        inserted.push(one as Vehicle);
+      }
+    }
+  }
+  return { inserted, failed };
 }

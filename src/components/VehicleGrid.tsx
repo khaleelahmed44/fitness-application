@@ -4,7 +4,6 @@ import { useState } from "react";
 import {
   flexRender,
   getCoreRowModel,
-  getFilteredRowModel,
   getSortedRowModel,
   useReactTable,
   type ColumnDef,
@@ -16,23 +15,22 @@ interface Props {
   data: Vehicle[];
   columns: ColumnDef<Vehicle, any>[];
   emptyText: string;
+  search: string;
+  onSearchChange: (v: string) => void;
+  actions?: React.ReactNode;
 }
 
 /** Excel-style grid: row numbers, gridlines, sticky header, sortable columns, search. */
-export default function VehicleGrid({ data, columns, emptyText }: Props) {
+export default function VehicleGrid({ data, columns, emptyText, search, onSearchChange, actions }: Props) {
   const [sorting, setSorting] = useState<SortingState>([]);
-  const [globalFilter, setGlobalFilter] = useState("");
 
   const table = useReactTable({
     data,
     columns,
-    state: { sorting, globalFilter },
+    state: { sorting },
     onSortingChange: setSorting,
-    onGlobalFilterChange: setGlobalFilter,
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
-    getFilteredRowModel: getFilteredRowModel(),
-    globalFilterFn: "includesString",
   });
 
   const rows = table.getRowModel().rows;
@@ -41,14 +39,17 @@ export default function VehicleGrid({ data, columns, emptyText }: Props) {
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="flex items-center justify-between gap-3 border-b bg-gray-50 px-3 py-2">
         <input
-          value={globalFilter}
-          onChange={(e) => setGlobalFilter(e.target.value)}
+          value={search}
+          onChange={(e) => onSearchChange(e.target.value)}
           placeholder="Search plate, chassis, engine, certificate…"
           className="w-full max-w-sm rounded border border-gray-300 px-3 py-1.5 text-sm"
         />
-        <span className="shrink-0 text-xs text-gray-500">
-          {rows.length} row{rows.length === 1 ? "" : "s"}
-        </span>
+        <div className="flex shrink-0 items-center gap-3">
+          <span className="text-xs text-gray-500">
+            {rows.length} row{rows.length === 1 ? "" : "s"}
+          </span>
+          {actions}
+        </div>
       </div>
 
       <div className="min-h-0 flex-1 overflow-auto">

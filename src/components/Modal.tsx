@@ -6,9 +6,10 @@ interface ModalProps {
   title: string;
   onClose: () => void;
   children: React.ReactNode;
+  wide?: boolean;
 }
 
-export default function Modal({ title, onClose, children }: ModalProps) {
+export default function Modal({ title, onClose, children, wide }: ModalProps) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
     window.addEventListener("keydown", onKey);
@@ -23,7 +24,7 @@ export default function Modal({ title, onClose, children }: ModalProps) {
       aria-modal="true"
       aria-label={title}
     >
-      <div className="w-full max-w-md rounded-lg bg-white shadow-xl">
+      <div className={`w-full ${wide ? "max-w-2xl" : "max-w-md"} max-h-[90vh] overflow-y-auto rounded-lg bg-white shadow-xl`}>
         <div className="flex items-center justify-between border-b px-5 py-3">
           <h2 className="font-semibold">{title}</h2>
           <button

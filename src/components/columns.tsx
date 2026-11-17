@@ -1,5 +1,6 @@
 import { createColumnHelper, type ColumnDef } from "@tanstack/react-table";
 import type { DocumentsStatus, Vehicle } from "@/types/database";
+import type { ExportFormat } from "@/lib/export";
 
 export type TabKey = "pending" | "passed" | "failed";
 
@@ -9,6 +10,7 @@ interface Options {
   onPass: (v: Vehicle) => void;
   onFail: (v: Vehicle) => void;
   onDocsChange: (v: Vehicle, s: DocumentsStatus) => void;
+  onExport: (v: Vehicle, format: ExportFormat) => void;
 }
 
 const h = createColumnHelper<Vehicle>();
@@ -41,6 +43,39 @@ export function buildColumns(tab: TabKey, o: Options): ColumnDef<Vehicle, any>[]
     h.accessor("chassis_no", { header: "Chassis No" }),
     h.accessor("engine_no", { header: "Engine No" }),
   ];
+
+  const exportCol = h.display({
+    id: "export",
+    header: "Download",
+    enableSorting: false,
+    cell: (c) => {
+      const v = c.row.original;
+      const isCert = v.status === "passed";
+      const btn =
+        "rounded border border-gray-300 px-2 py-0.5 text-xs font-medium text-gray-700 hover:bg-gray-100";
+      return (
+        <div className="flex gap-1">
+          <button
+            className={btn}
+            title={isCert ? "Download e-certificate (PDF)" : "Download record (PDF)"}
+            onClick={() => o.onExport(v, "pdf")}
+          >
+            PDF
+          </button>
+          <button className={btn} title="Download as Excel" onClick={() => o.onExport(v, "xlsx")}>
+            XLSX
+          </button>
+          <button
+            className={btn}
+            title={isCert ? "Download e-certificate (Word)" : "Download record (Word)"}
+            onClick={() => o.onExport(v, "docx")}
+          >
+            DOCX
+          </button>
+        </div>
+      );
+    },
+  });
 
   if (tab === "pending") {
     return [
@@ -100,6 +135,7 @@ export function buildColumns(tab: TabKey, o: Options): ColumnDef<Vehicle, any>[]
             }),
           ]
         : []),
+      exportCol,
     ];
   }
 
@@ -128,6 +164,7 @@ export function buildColumns(tab: TabKey, o: Options): ColumnDef<Vehicle, any>[]
           </a>
         ),
       }),
+      exportCol,
     ];
   }
 
@@ -140,5 +177,6 @@ export function buildColumns(tab: TabKey, o: Options): ColumnDef<Vehicle, any>[]
     }),
     h.accessor("inspector_name", { header: "Inspector", cell: (c) => c.getValue() ?? "—" }),
     h.accessor("inspected_at", { header: "Date", cell: (c) => fmtDate(c.getValue()) }),
+    exportCol,
   ];
 }
