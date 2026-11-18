@@ -57,7 +57,7 @@ export function canEdit(v: Vehicle, userId: string, role: Role): boolean {
   return v.status === "draft" && v.created_by === userId;
 }
 
-/** Send for Verification: the person who logged a draft, or an inspector / admin. */
+/** Request Verification: the person who logged a draft, or an inspector / admin. */
 export function canSend(v: Vehicle, userId: string, role: Role): boolean {
   return v.status === "draft" && (canVerify(role) || v.created_by === userId);
 }
@@ -69,7 +69,14 @@ export const STATUS_LABEL: Record<VehicleStatus, string> = {
 };
 
 /** Delete / recycle: super admin only (mirrors RLS). */
+/** Bulk delete ("Delete all"): admin and inspector only. */
 export const canDelete = (role: Role | undefined): boolean => role === "admin" || role === "inspector";
+
+/** Single delete (mirrors RLS): admin / inspector any record; assistants only their own entries still in Working. */
+export function canDeleteRow(v: Vehicle, userId: string, role: Role): boolean {
+  if (role === "admin" || role === "inspector") return true;
+  return v.status === "draft" && v.created_by === userId;
+}
 
 export interface ManagedUser {
   id: string;

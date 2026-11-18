@@ -11,7 +11,7 @@ interface Options {
   busyId: number | null;
   /** Whether the signed-in user may approve / unverify (inspector, admin) */
   canVerify: boolean;
-  /** Whether the signed-in user may send this draft for verification */
+  /** Whether the signed-in user may request verification for this draft */
   canSend: (v: Vehicle) => boolean;
   onSend: (v: Vehicle) => void;
   onApprove: (v: Vehicle) => void;
@@ -112,11 +112,11 @@ export function buildColumns(tab: TabKey, o: Options): ColumnDef<Vehicle, any>[]
               <button
                 onClick={() => o.onSend(v)}
                 disabled={o.busyId === v.id}
-                title="Send this entry to Pending for inspector verification"
+                title="Request verification: moves this entry to Pending for the inspector"
                 className="mr-1 inline-flex items-center gap-1 whitespace-nowrap rounded-lg bg-indigo-600 px-3 py-1 text-xs font-semibold text-white shadow-sm transition hover:bg-indigo-700 disabled:opacity-40"
               >
                 <Send className="h-3.5 w-3.5" />
-                Send for Verification
+                Request Verification
               </button>
             )}
             {v.status === "pending" && o.canVerify && (

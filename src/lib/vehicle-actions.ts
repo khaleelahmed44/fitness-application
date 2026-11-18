@@ -120,7 +120,7 @@ export async function sendForVerification(supabase: SupabaseClient, id: number):
     .select();
   if (error) throw explain(error);
   if (!data || data.length === 0) {
-    throw new ActionError("Could not send this entry: it already moved, or it is not yours.");
+    throw new ActionError("Could not request verification: this entry already moved, or it is not yours.");
   }
   return data[0] as Vehicle;
 }

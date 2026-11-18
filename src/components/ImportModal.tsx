@@ -79,7 +79,7 @@ export default function ImportModal({ existingJumpers, onImport, onClose }: Prop
               Upload an Excel (<b>.xlsx</b>) or <b>.csv</b> file with a header row. Columns:{" "}
               <b>Vehicle No</b> (required, must be unique), <b>Collected By</b> (required),{" "}
               <b>Documents Original Submitted</b>, <b>Date of Entry</b>, <b>District</b> and <b>Traffic Station</b>.
-              Valid rows go to the Working tab; send them for verification afterwards.
+              Valid rows go to the Working tab; request verification afterwards.
             </p>
             <div className="flex flex-wrap items-center gap-3">
               <input

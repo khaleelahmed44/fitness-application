@@ -1,11 +1,11 @@
 # CFX – Document Verification Portal
 
-A spreadsheet-style web portal where assistants log records, send them for verification, and inspectors approve them.
+A spreadsheet-style web portal where assistants log records, request verification, and inspectors approve them.
 Stack: Next.js 15 (App Router, TypeScript), Tailwind, TanStack Table, framer-motion, Supabase (Postgres + Auth + RLS), Vercel.
 
 ## Workflow (tabs: Working · Pending · Verified · Daily Files)
 
-1. **Assistant** logs an entry in **Working** and clicks **Send for Verification** (per entry, or *Send all*).
+1. **Assistant** logs an entry in **Working** and clicks **Request Verification** (per entry, or **Request all**). An assistant can delete their own entries while they are still in Working (single delete only).
 2. The entry moves to **Pending** (Inspector / Admin).
 3. Inspector or Admin clicks **Approve** (one click) or **Approve all**; a certificate number is issued and the record moves to **Verified**. *Unverify* returns it to Pending.
 4. **Daily Files**: every record is filed under the date it was logged (`YYYY-MM-DD`). Today's folder is active, earlier days are archived; open a day to see its records.
@@ -24,7 +24,7 @@ S.No (auto) · Vehicle No · Documents Original Submitted (free text, with sugge
 
 - **Super Admin** (exactly one): everything an Inspector can do, plus the Admin Panel (`/admin`): create / remove inspectors, reset passwords, monitoring, recycle bin (restore / purge).
 - **Inspector** (created by the Admin): sees all records, edits any, approves / unverifies, deletes (single or *Delete all*), manages their assistants at `/team`.
-- **Assistant** (created by an Inspector): adds and imports entries, edits their own working entries, sends them for verification. Assistants only see their own working entries.
+- **Assistant** (created by an Inspector): adds and imports entries, edits or deletes (one at a time) their own working entries, requests verification (one or all). Assistants only see their own working entries.
 - No self-registration. All rules are enforced in Postgres (RLS + triggers), not only in the browser.
 - Login: a username maps internally to `<username>@vehicle.local` (never mailed).
 - The Super Admin password is not stored in this repo. Reset it in the Supabase SQL editor:
@@ -37,7 +37,7 @@ S.No (auto) · Vehicle No · Documents Original Submitted (free text, with sugge
 
 ## Database setup
 
-Run `supabase/migrations/001` … `009` in order in the Supabase SQL editor (008 = CFX workflow, 009 = Vehicle No is the unique identifier). Then seed the single admin (an auth user + `profiles.role = 'admin'`).
+Run `supabase/migrations/001` … `010` in order in the Supabase SQL editor (008 = CFX workflow, 009 = Vehicle No is the unique identifier, 010 = assistant delete of own working entries). Then seed the single admin (an auth user + `profiles.role = 'admin'`).
 
 ## Run locally
 

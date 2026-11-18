@@ -37,7 +37,7 @@ import {
 } from "@/lib/vehicle-actions";
 import { exportList, exportRecord, type ExportFormat } from "@/lib/export";
 import { suggestionsFor, type SuggestField } from "@/lib/suggestions";
-import { canDelete, canEdit, canSend, canVerify, type Profile, type Vehicle, type VehicleInput } from "@/types/database";
+import { canDelete, canDeleteRow, canEdit, canSend, canVerify, type Profile, type Vehicle, type VehicleInput } from "@/types/database";
 import VehicleGrid from "./VehicleGrid";
 import EntryModal from "./EntryModal";
 import ImportModal from "./ImportModal";
@@ -151,7 +151,7 @@ export default function Dashboard({ profile, initialVehicles }: Props) {
     flash(
       "ok",
       entryStage === "draft"
-        ? `${created.jumper_no} added to Working. Send it for verification when ready.`
+        ? `${created.jumper_no} added to Working. Request verification when ready.`
         : `${created.jumper_no} added to Pending.`
     );
   };
@@ -212,10 +212,10 @@ export default function Dashboard({ profile, initialVehicles }: Props) {
     setBusyId(v.id);
     try {
       upsertLocal(await sendForVerification(supabase, v.id));
-      flash("ok", `${v.jumper_no} sent to Pending (inspector verification).`);
+      flash("ok", `Verification requested for ${v.jumper_no}. It is now in Pending.`);
     } catch (err) {
       await refresh();
-      flash("err", err instanceof Error ? err.message : "Could not send for verification");
+      flash("err", err instanceof Error ? err.message : "Could not request verification");
     } finally {
       setBusyId(null);
     }
@@ -225,7 +225,7 @@ export default function Dashboard({ profile, initialVehicles }: Props) {
     const ids = rows.filter((r) => r.status === "draft" && canSend(r, profile.id, profile.role)).map((r) => r.id);
     const moved = await moveAll(supabase, ids, "draft", "pending");
     moved.forEach(upsertLocal);
-    flash("ok", `${moved.length} entr${moved.length === 1 ? "y" : "ies"} sent to Pending.`);
+    flash("ok", `${moved.length} entr${moved.length === 1 ? "y" : "ies"}: verification requested. Now in Pending.`);
   };
 
   const handleApproveAll = async () => {
@@ -336,7 +336,7 @@ export default function Dashboard({ profile, initialVehicles }: Props) {
     () =>
       buildColumns(tab, {
         canEdit: (v) => canEdit(v, profile.id, profile.role),
-        canDelete: () => canDelete(profile.role),
+        canDelete: (v) => canDeleteRow(v, profile.id, profile.role),
         canVerify: verifier,
         canSend: (v) => canSend(v, profile.id, profile.role),
         busyId,
@@ -604,7 +604,7 @@ export default function Dashboard({ profile, initialVehicles }: Props) {
                       className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-3.5 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-700"
                     >
                       <Send className="h-4 w-4" />
-                      <span className="hidden sm:inline">Send all for verification</span>
+                      <span className="hidden sm:inline">Request verification for all</span>
                     </button>
                   )}
                   {tab === "pending" && verifier && (
@@ -735,7 +735,7 @@ export default function Dashboard({ profile, initialVehicles }: Props) {
         {dialog?.kind === "sendAll" && (
           <ConfirmModal
             key="send-all"
-            title="Send all for verification?"
+            title="Request verification for all?"
             message={
               <>
                 Every entry currently listed in <b>Working</b>
@@ -743,7 +743,7 @@ export default function Dashboard({ profile, initialVehicles }: Props) {
                 will no longer be able to edit them.
               </>
             }
-            confirmLabel="Send all"
+            confirmLabel="Request all"
             onConfirm={handleSendAll}
             onClose={() => setDialog(null)}
           />
