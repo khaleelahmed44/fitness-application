@@ -132,7 +132,7 @@ export default function AdminPanel({ adminName }: { adminName: string }) {
             href="/"
             className="inline-flex items-center gap-2 rounded-xl bg-white/10 px-3.5 py-2 text-sm font-medium hover:bg-white/20"
           >
-            <ArrowLeft className="h-4 w-4" /> Register
+            <ArrowLeft className="h-4 w-4" /> CFX
           </Link>
           <button
             onClick={() => void load()}
@@ -249,7 +249,7 @@ export default function AdminPanel({ adminName }: { adminName: string }) {
           <div className="space-y-3">
             <div className="flex items-center justify-between">
               <p className="text-sm text-slate-600">
-                Records deleted from the register are kept here. Restore them, or delete them permanently.
+                Records deleted from CFX are kept here. Restore them, or delete them permanently.
               </p>
               <button
                 disabled={trash.length === 0}

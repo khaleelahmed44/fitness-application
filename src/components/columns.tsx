@@ -1,17 +1,21 @@
 import { createColumnHelper, type ColumnDef } from "@tanstack/react-table";
-import { BadgeCheck, Download, FileText, Pencil, Trash2 } from "lucide-react";
-import type { Vehicle } from "@/types/database";
+import { BadgeCheck, Download, FileText, Pencil, Send, Trash2, Undo2 } from "lucide-react";
+import { STATUS_LABEL, type Vehicle } from "@/types/database";
 import type { ExportFormat } from "@/lib/export";
 
-export type TabKey = "pending" | "passed";
+export type TabKey = "draft" | "pending" | "passed" | "daily";
 
 interface Options {
   canEdit: (v: Vehicle) => boolean;
   canDelete: (v: Vehicle) => boolean;
   busyId: number | null;
-  /** Whether the signed-in user may switch this row's verification */
-  canToggle: (v: Vehicle) => boolean;
-  onToggleVerify: (v: Vehicle) => void;
+  /** Whether the signed-in user may approve / unverify (inspector, admin) */
+  canVerify: boolean;
+  /** Whether the signed-in user may send this draft for verification */
+  canSend: (v: Vehicle) => boolean;
+  onSend: (v: Vehicle) => void;
+  onApprove: (v: Vehicle) => void;
+  onUnverify: (v: Vehicle) => void;
   onEdit: (v: Vehicle) => void;
   onDelete: (v: Vehicle) => void;
   onExport: (v: Vehicle, format: ExportFormat) => void;
@@ -28,47 +32,17 @@ const fmtDate = (iso: string | null) =>
       })
     : "—";
 
-function VerifyToggle({ v, o }: { v: Vehicle; o: Options }) {
-  const on = v.status === "passed";
-  const allowed = o.canToggle(v);
-  const busy = o.busyId === v.id;
-  const label = on ? "Verified" : "Not Verified";
+const STATUS_STYLE: Record<Vehicle["status"], string> = {
+  draft: "bg-slate-100 text-slate-700",
+  pending: "bg-amber-100 text-amber-700",
+  passed: "bg-emerald-100 text-emerald-700",
+};
 
-  if (!allowed) {
-    return (
-      <span
-        title="Only an authorised inspector or admin can change verification"
-        className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${
-          on ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"
-        }`}
-      >
-        {label}
-      </span>
-    );
-  }
+function StatusBadge({ v }: { v: Vehicle }) {
   return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={on}
-      aria-label={`${label} – click to change`}
-      disabled={busy}
-      onClick={() => o.onToggleVerify(v)}
-      className="group inline-flex items-center gap-2 disabled:opacity-50"
-    >
-      <span
-        className={`relative h-5 w-9 rounded-full transition-colors ${
-          on ? "bg-emerald-500" : "bg-slate-300 group-hover:bg-slate-400"
-        }`}
-      >
-        <span
-          className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-all ${
-            on ? "left-[18px]" : "left-0.5"
-          }`}
-        />
-      </span>
-      <span className={`text-xs font-semibold ${on ? "text-emerald-700" : "text-amber-700"}`}>{label}</span>
-    </button>
+    <span className={`inline-flex items-center whitespace-nowrap rounded-full px-2.5 py-0.5 text-xs font-semibold ${STATUS_STYLE[v.status]}`}>
+      {STATUS_LABEL[v.status]}
+    </span>
   );
 }
 
@@ -82,6 +56,10 @@ export function buildColumns(tab: TabKey, o: Options): ColumnDef<Vehicle, any>[]
     h.accessor("id", {
       header: "S.No",
       cell: (c) => <span className="tabular-nums text-slate-500">{c.getValue()}</span>,
+    }),
+    h.accessor("jumper_no", {
+      header: "Jumper No",
+      cell: (c) => <span className="font-mono text-xs font-semibold text-indigo-700">{c.getValue()}</span>,
     }),
     h.accessor("registration_no", {
       header: "Vehicle No",
@@ -100,19 +78,19 @@ export function buildColumns(tab: TabKey, o: Options): ColumnDef<Vehicle, any>[]
     h.accessor("district", { header: "District", cell: (c) => dash(c.getValue()) }),
     h.accessor("traffic_station", { header: "Traffic Station", cell: (c) => dash(c.getValue()) }),
     h.accessor("collected_by_or_operator_name", {
-      header: "Name",
+      header: "Collected By",
       cell: (c) => dash(c.getValue()),
     }),
   ];
 
   cols.push(
     h.accessor("status", {
-      header: "Verification",
-      cell: (c) => <VerifyToggle v={c.row.original} o={o} />,
+      header: "Status",
+      cell: (c) => <StatusBadge v={c.row.original} />,
     })
   );
 
-  if (tab === "passed") {
+  if (tab === "passed" || tab === "daily") {
     cols.push(
       h.accessor("certificate_no", {
         header: "Certificate No",
@@ -134,18 +112,29 @@ export function buildColumns(tab: TabKey, o: Options): ColumnDef<Vehicle, any>[]
         const deletable = o.canDelete(v);
         return (
           <div className="flex items-center gap-1">
-            {tab === "pending" && o.canToggle(v) && (
+            {v.status === "draft" && o.canSend(v) && (
               <button
-                onClick={() => o.onToggleVerify(v)}
+                onClick={() => o.onSend(v)}
                 disabled={o.busyId === v.id}
-                title="Verify this vehicle"
+                title="Send this entry to the inspector verification queue"
+                className="mr-1 inline-flex items-center gap-1 whitespace-nowrap rounded-lg bg-indigo-600 px-3 py-1 text-xs font-semibold text-white shadow-sm transition hover:bg-indigo-700 disabled:opacity-40"
+              >
+                <Send className="h-3.5 w-3.5" />
+                Send for Verification
+              </button>
+            )}
+            {v.status === "pending" && o.canVerify && (
+              <button
+                onClick={() => o.onApprove(v)}
+                disabled={o.busyId === v.id}
+                title="Approve this record"
                 className="mr-1 inline-flex items-center gap-1 rounded-lg bg-emerald-600 px-3 py-1 text-xs font-semibold text-white shadow-sm transition hover:bg-emerald-700 disabled:opacity-40"
               >
                 <BadgeCheck className="h-3.5 w-3.5" />
-                Verify
+                Approve
               </button>
             )}
-            {tab === "passed" && (
+            {v.status === "passed" && (
               <a
                 href={`/certificate/${v.id}`}
                 target="_blank"
@@ -155,6 +144,11 @@ export function buildColumns(tab: TabKey, o: Options): ColumnDef<Vehicle, any>[]
                 <FileText className="h-3.5 w-3.5" />
                 Certificate
               </a>
+            )}
+            {v.status === "passed" && o.canVerify && (
+              <button className={iconBtn} title="Unverify (return to verification queue)" onClick={() => o.onUnverify(v)}>
+                <Undo2 className="h-4 w-4" />
+              </button>
             )}
             {editable && (
               <button className={iconBtn} title="Edit" onClick={() => o.onEdit(v)}>

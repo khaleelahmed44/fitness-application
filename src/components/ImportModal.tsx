@@ -7,8 +7,8 @@ import { downloadBlob } from "@/lib/export/download";
 import type { ImportResult, ImportRow } from "@/lib/vehicle-actions";
 
 interface Props {
-  /** Upper-cased plates already in the pending queue */
-  existingPlates: Set<string>;
+  /** Upper-cased jumper numbers already in the register */
+  existingJumpers: Set<string>;
   onImport: (rows: ImportRow[]) => Promise<ImportResult>;
   onClose: () => void;
 }
@@ -20,7 +20,7 @@ interface Preview {
   totalRows: number;
 }
 
-export default function ImportModal({ existingPlates, onImport, onClose }: Props) {
+export default function ImportModal({ existingJumpers, onImport, onClose }: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -37,12 +37,12 @@ export default function ImportModal({ existingPlates, onImport, onClose }: Props
     setBusy(true);
     try {
       const parsed = await parseVehicleFile(file);
-      // Skip plates that are already waiting in the queue
+      // Skip jumper numbers that are already in the register
       const valid: ParseResult["valid"] = [];
       const invalid = [...parsed.invalid];
       for (const r of parsed.valid) {
-        if (existingPlates.has(r.registration_no)) {
-          invalid.push({ line: r.line, message: `${r.registration_no} is already in the pending queue` });
+        if (existingJumpers.has(r.jumper_no)) {
+          invalid.push({ line: r.line, message: `Jumper ${r.jumper_no} is already in the register` });
         } else valid.push(r);
       }
       invalid.sort((a, b) => a.line - b.line);
@@ -77,9 +77,9 @@ export default function ImportModal({ existingPlates, onImport, onClose }: Props
           <>
             <p className="text-slate-600">
               Upload an Excel (<b>.xlsx</b>) or <b>.csv</b> file with a header row. Columns:{" "}
-              <b>Vehicle No</b> (required), <b>Documents Original Submitted</b> (free text), <b>Date of Entry</b>,{" "}
-              <b>District</b>, <b>Traffic Station</b> and <b>Name</b>. Valid rows go to the Pending
-              queue.
+              <b>Jumper No</b> (required, unique per visit), <b>Vehicle No</b> (required), <b>Collected By</b> (required),{" "}
+              <b>Documents Original Submitted</b>, <b>Date of Entry</b>, <b>District</b> and <b>Traffic Station</b>.
+              Valid rows go to the Working Queue; send them for verification afterwards.
             </p>
             <div className="flex flex-wrap items-center gap-3">
               <input
@@ -95,7 +95,7 @@ export default function ImportModal({ existingPlates, onImport, onClose }: Props
                 onClick={() =>
                   downloadBlob(
                     new Blob([TEMPLATE_CSV], { type: "text/csv;charset=utf-8" }),
-                    "vehicle-import-template.csv"
+                    "cfx-import-template.csv"
                   )
                 }
                 className="text-indigo-600 hover:underline"

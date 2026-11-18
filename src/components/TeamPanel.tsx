@@ -22,7 +22,7 @@ export default function TeamPanel({ name }: { name: string }) {
           <p className="text-xs text-indigo-200/70">Assistants / data-entry users managed by {name}</p>
         </div>
         <Link href="/" className="inline-flex items-center gap-2 rounded-xl bg-white/10 px-3.5 py-2 text-sm font-medium hover:bg-white/20">
-          <ArrowLeft className="h-4 w-4" /> Register
+          <ArrowLeft className="h-4 w-4" /> CFX
         </Link>
       </header>
       <main className="mx-auto max-w-6xl p-4 sm:p-8">

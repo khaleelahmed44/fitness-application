@@ -8,6 +8,7 @@ const clean = (s: string) => s.trim().replace(/\s+/g, " ");
 
 function payload(i: VehicleInput) {
   return {
+    jumper_no: normalise(i.jumper_no),
     registration_no: normalise(i.registration_no),
     document_status: clean(i.document_status).replace(/[,;\s]+$/, ""),
     district: clean(i.district) || null,
@@ -19,7 +20,7 @@ function payload(i: VehicleInput) {
 
 function explain(error: { code?: string; message: string }): ActionError {
   if (error.code === "23505") {
-    return new ActionError("This vehicle number is already in the pending queue (Not Verified).");
+    return new ActionError("This Jumper No is already in use. Every visit needs its own unique jumper number.");
   }
   if (error.code === "42501") {
     return new ActionError("You are not authorised to do this.");
@@ -27,10 +28,17 @@ function explain(error: { code?: string; message: string }): ActionError {
   return new ActionError(error.message);
 }
 
-export async function addVehicle(supabase: SupabaseClient, input: VehicleInput): Promise<Vehicle> {
+/** Assistants log into the working queue ("draft"); inspectors / admins may enter straight into the verification queue. */
+export type EntryStage = "draft" | "pending";
+
+export async function addVehicle(
+  supabase: SupabaseClient,
+  input: VehicleInput,
+  stage: EntryStage = "draft"
+): Promise<Vehicle> {
   const { data, error } = await supabase
     .from("vehicles")
-    .insert({ ...payload(input), status: "pending" })
+    .insert({ ...payload(input), status: stage })
     .select()
     .single();
   if (error) throw explain(error);
@@ -86,17 +94,11 @@ export async function deleteVehicles(supabase: SupabaseClient, ids: number[]): P
 export async function setVerification(
   supabase: SupabaseClient,
   id: number,
-  verified: boolean,
-  /** Optional: who collected the vehicle, saved together with the verification */
-  collectedBy?: string
+  verified: boolean
 ): Promise<Vehicle> {
-  const name = collectedBy ? clean(collectedBy) : "";
   const { data, error } = await supabase
     .from("vehicles")
-    .update({
-      status: verified ? "passed" : "pending",
-      ...(verified && name ? { collected_by_or_operator_name: name } : {}),
-    })
+    .update({ status: verified ? "passed" : "pending" })
     .eq("id", id)
     .eq("status", verified ? "pending" : "passed")
     .select();
@@ -105,6 +107,42 @@ export async function setVerification(
     throw new ActionError("Could not change verification: it already changed, or you lack permission.");
   }
   return data[0] as Vehicle;
+}
+
+/** Move a working-queue entry into the inspector verification queue. */
+export async function sendForVerification(supabase: SupabaseClient, id: number): Promise<Vehicle> {
+  const { data, error } = await supabase
+    .from("vehicles")
+    .update({ status: "pending" })
+    .eq("id", id)
+    .eq("status", "draft")
+    .select();
+  if (error) throw explain(error);
+  if (!data || data.length === 0) {
+    throw new ActionError("Could not send this entry: it already moved, or it is not yours.");
+  }
+  return data[0] as Vehicle;
+}
+
+/** Bulk status move (Send all / Approve all). Returns the updated rows. */
+export async function moveAll(
+  supabase: SupabaseClient,
+  ids: number[],
+  from: "draft" | "pending",
+  to: "pending" | "passed"
+): Promise<Vehicle[]> {
+  const out: Vehicle[] = [];
+  for (let i = 0; i < ids.length; i += 100) {
+    const { data, error } = await supabase
+      .from("vehicles")
+      .update({ status: to })
+      .in("id", ids.slice(i, i + 100))
+      .eq("status", from)
+      .select();
+    if (error) throw explain(error);
+    out.push(...((data ?? []) as Vehicle[]));
+  }
+  return out;
 }
 
 export interface ImportRow extends VehicleInput {
@@ -120,7 +158,8 @@ export interface ImportResult {
 /** Bulk insert into the pending queue; falls back to row-by-row if a chunk is rejected. */
 export async function importVehicles(
   supabase: SupabaseClient,
-  rows: ImportRow[]
+  rows: ImportRow[],
+  stage: EntryStage = "draft"
 ): Promise<ImportResult> {
   const inserted: Vehicle[] = [];
   const failed: ImportResult["failed"] = [];
@@ -128,7 +167,7 @@ export async function importVehicles(
 
   for (let i = 0; i < rows.length; i += CHUNK) {
     const chunk = rows.slice(i, i + CHUNK);
-    const body = chunk.map((r) => ({ ...payload(r), status: "pending" }));
+    const body = chunk.map((r) => ({ ...payload(r), status: stage }));
 
     const { data, error } = await supabase.from("vehicles").insert(body).select();
     if (!error) {
@@ -144,7 +183,7 @@ export async function importVehicles(
       if (err) {
         failed.push({
           line: chunk[j].line,
-          message: err.code === "23505" ? "Vehicle number is already in the pending queue" : err.message,
+          message: err.code === "23505" ? "Jumper No is already in use" : err.message,
         });
       } else {
         inserted.push(one as Vehicle);

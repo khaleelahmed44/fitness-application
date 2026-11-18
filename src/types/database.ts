@@ -1,5 +1,6 @@
 export type Role = "assistant" | "inspector" | "admin";
-export type VehicleStatus = "pending" | "passed";
+/** draft = assistant working queue, pending = inspector verification queue, passed = verified */
+export type VehicleStatus = "draft" | "pending" | "passed";
 
 export interface Profile {
   id: string;
@@ -14,6 +15,8 @@ export interface Profile {
 export interface Vehicle {
   /** S.No */
   id: number;
+  /** Unique jumper / token number of this visit (records are tracked by this, not by vehicle no) */
+  jumper_no: string;
   /** Vehicle No */
   registration_no: string;
   /** Documents Original Submitted – free text, e.g. "CNIC, Original Registration Book" */
@@ -22,7 +25,7 @@ export interface Vehicle {
   date_of_entry: string;
   district: string | null;
   traffic_station: string | null;
-  /** Name – person who collected / data-entry operator */
+  /** Collected By – the assistant who received and processed the documents */
   collected_by_or_operator_name: string;
   status: VehicleStatus;
   certificate_no: string | null;
@@ -34,11 +37,12 @@ export interface Vehicle {
 }
 
 export interface VehicleInput {
+  jumper_no: string;
   registration_no: string;
   document_status: string;
   district: string;
   traffic_station: string;
-  /** Leave blank to use the signed-in user's name (done by the database) */
+  /** Collected By (mandatory) */
   collected_by_or_operator_name: string;
   /** Optional (imports only) – YYYY-MM-DD */
   date_of_entry?: string;
@@ -47,11 +51,22 @@ export interface VehicleInput {
 export const canVerify = (role: Role | undefined): boolean =>
   role === "inspector" || role === "admin";
 
-/** Edit rule (mirrors RLS): admin and inspectors any record; assistants only their own pending rows. */
+/** Edit rule (mirrors RLS): admin and inspectors any record; assistants only their own drafts. */
 export function canEdit(v: Vehicle, userId: string, role: Role): boolean {
   if (role === "admin" || role === "inspector") return true;
-  return v.status === "pending" && v.created_by === userId;
+  return v.status === "draft" && v.created_by === userId;
 }
+
+/** Send for Verification: the person who logged a draft, or an inspector / admin. */
+export function canSend(v: Vehicle, userId: string, role: Role): boolean {
+  return v.status === "draft" && (canVerify(role) || v.created_by === userId);
+}
+
+export const STATUS_LABEL: Record<VehicleStatus, string> = {
+  draft: "Working",
+  pending: "In Verification Queue",
+  passed: "Verified",
+};
 
 /** Delete / recycle: super admin only (mirrors RLS). */
 export const canDelete = (role: Role | undefined): boolean => role === "admin" || role === "inspector";

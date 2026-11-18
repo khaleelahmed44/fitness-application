@@ -5,8 +5,8 @@ import "./globals.css";
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter", display: "swap" });
 
 export const metadata: Metadata = {
-  title: "Vehicle Fitness Register",
-  description: "Vehicle fitness register and e-certificate management",
+  title: "CFX",
+  description: "CFX – document verification portal",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

@@ -4,9 +4,7 @@ const fmt = (d: Date) =>
   d.toLocaleDateString("en-GB", { day: "2-digit", month: "long", year: "numeric" });
 
 export default function Certificate({ vehicle }: { vehicle: Vehicle }) {
-  const authority =
-    process.env.NEXT_PUBLIC_AUTHORITY_NAME ?? "Vehicle Fitness Inspection Authority";
-  const subtitle = process.env.NEXT_PUBLIC_AUTHORITY_SUBTITLE ?? "";
+  const authority = "CFX";
   const months = Number(process.env.NEXT_PUBLIC_CERT_VALIDITY_MONTHS ?? "12");
 
   const issued = new Date(vehicle.verified_at ?? vehicle.created_at);
@@ -14,6 +12,7 @@ export default function Certificate({ vehicle }: { vehicle: Vehicle }) {
   expiry.setMonth(expiry.getMonth() + months);
 
   const rows: [string, string][] = [
+    ["Jumper No", vehicle.jumper_no],
     ["Vehicle No", vehicle.registration_no],
     ["Documents Original Submitted", vehicle.document_status || "—"],
     ["Date of Entry", fmt(new Date(`${vehicle.date_of_entry}T00:00:00`))],
@@ -28,13 +27,12 @@ export default function Certificate({ vehicle }: { vehicle: Vehicle }) {
     <div className="certificate-sheet mx-auto bg-white p-[14mm] shadow-lg">
       <div className="flex min-h-[269mm] flex-col border-[3px] border-double border-blue-900 p-[10mm]">
         <header className="text-center">
-          <p className="text-sm uppercase tracking-[0.3em] text-blue-900">{subtitle}</p>
           <h1 className="mt-1 text-2xl font-bold uppercase text-blue-900">{authority}</h1>
           <div className="mx-auto mt-4 h-px w-40 bg-blue-900" />
           <h2 className="mt-6 text-4xl font-bold tracking-wide text-gray-900">
-            Vehicle Fitness Certificate
+            Verification Certificate
           </h2>
-          <p className="mt-2 text-sm text-gray-600">E-Certificate of Roadworthiness</p>
+          <p className="mt-2 text-sm text-gray-600">Electronic Certificate</p>
         </header>
 
         <section className="mt-10 text-center">
@@ -43,9 +41,7 @@ export default function Certificate({ vehicle }: { vehicle: Vehicle }) {
         </section>
 
         <p className="mt-10 text-center text-base leading-relaxed text-gray-800">
-          This is to certify that the vehicle described below has been verified and found
-          <strong> FIT </strong>
-          for road use as of the date of verification.
+          This is to certify that the vehicle described below has been <strong>VERIFIED</strong> by {authority} as of the date of verification.
         </p>
 
         <table className="mt-8 w-full border-collapse text-base">
@@ -69,7 +65,7 @@ export default function Certificate({ vehicle }: { vehicle: Vehicle }) {
               {vehicle.verified_by_name ?? "—"}
             </div>
             <p className="mt-1 text-xs uppercase tracking-wide text-gray-600">
-              Verifying Officer
+              Verified By
             </p>
           </div>
           <div className="text-right text-xs text-gray-500">

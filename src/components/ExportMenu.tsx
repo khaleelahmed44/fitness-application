@@ -13,7 +13,7 @@ interface Props {
 }
 
 const SCOPES: { scope: ExportScope; label: string; hint: string; Icon: typeof Layers }[] = [
-  { scope: "all", label: "Export all", hint: "Complete register, one file", Icon: Layers },
+  { scope: "all", label: "Export all", hint: "Complete CFX report, one file", Icon: Layers },
   { scope: "verified", label: "Verified only", hint: "Successfully verified vehicles", Icon: BadgeCheck },
   { scope: "pending", label: "Non-verified only", hint: "Pending / unverified vehicles", Icon: Truck },
 ];

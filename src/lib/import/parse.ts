@@ -7,6 +7,7 @@ const MAX_FIELD_LENGTH = 50;
 export interface ParsedRow {
   /** Row number in the source file (1-based, as the user sees it) */
   line: number;
+  jumper_no: string;
   registration_no: string;
   document_status: string;
   district: string;
@@ -31,6 +32,7 @@ interface RawRow {
 const key = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
 
 const ALIASES = {
+  jumper_no: ["jumperno", "jumpernumber", "jumper", "jumperid", "tokenno", "tokennumber", "token"],
   registration_no: [
     "registrationno", "registrationnumber", "registration", "regno", "regnumber",
     "reg", "numberplate", "plateno", "platenumber", "plate", "vehicleno",
@@ -45,7 +47,7 @@ const ALIASES = {
   traffic_station: ["trafficstation", "station", "ps", "policestation"],
   collected_by_or_operator_name: [
     "name", "collectedby", "collectedbyoperatorname", "operatorname", "operator", "collector",
-    "dataentryname", "collectedbyname",
+    "dataentryname", "collectedbyname", "collectedbyassistant", "assistant", "assistantname",
   ],
 } as const;
 
@@ -222,6 +224,7 @@ export async function parseVehicleFile(file: File | null | undefined): Promise<P
   const header = rows[headerIdx];
   const data = rows.slice(headerIdx + 1);
   const col = {
+    jumper_no: findColumn(header.cells, "jumper_no"),
     registration_no: findColumn(header.cells, "registration_no"),
     document_status: findColumn(header.cells, "document_status"),
     date_of_entry: findColumn(header.cells, "date_of_entry"),
@@ -235,9 +238,14 @@ export async function parseVehicleFile(file: File | null | undefined): Promise<P
       "Missing column: Vehicle No. The first row of the file must be a header row (see the template)."
     );
   }
+  if (col.jumper_no < 0) {
+    throw new Error(
+      "Missing column: Jumper No (the unique token number of each visit). Add a JUMPER NO column to the header row (see the template)."
+    );
+  }
   if (col.collected_by_or_operator_name < 0) {
     throw new Error(
-      "Missing column: Name (the data-entry / assistant who logged the entry). Add a NAME column to the header row (see the template)."
+      "Missing column: Collected By (the assistant who received the documents). Add a COLLECTED BY column to the header row (see the template)."
     );
   }
   if (data.length > MAX_IMPORT_ROWS) {
@@ -248,9 +256,10 @@ export async function parseVehicleFile(file: File | null | undefined): Promise<P
 
   const valid: ParsedRow[] = [];
   const invalid: ParseResult["invalid"] = [];
-  const seen = new Map<string, number>();
+  const seen = new Map<string, number>(); // unique key = Jumper No (a vehicle may return on another visit)
 
   for (const r of data) {
+    const jumper = normaliseField(cell(r, col.jumper_no));
     const reg = normaliseField(cell(r, col.registration_no));
     const district = cell(r, col.district);
     const station = cell(r, col.traffic_station);
@@ -261,7 +270,15 @@ export async function parseVehicleFile(file: File | null | undefined): Promise<P
       invalid.push({ line: r.line, message: "Missing vehicle no" });
       continue;
     }
-    if ([reg, district, station, name].some((v) => v.length > MAX_FIELD_LENGTH)) {
+    if (!jumper) {
+      invalid.push({ line: r.line, message: "Missing jumper no" });
+      continue;
+    }
+    if (!name) {
+      invalid.push({ line: r.line, message: "Missing Collected By" });
+      continue;
+    }
+    if ([jumper, reg, district, station, name].some((v) => v.length > MAX_FIELD_LENGTH)) {
       invalid.push({ line: r.line, message: `A value is longer than ${MAX_FIELD_LENGTH} characters` });
       continue;
     }
@@ -274,14 +291,15 @@ export async function parseVehicleFile(file: File | null | undefined): Promise<P
       }
       date = parsed;
     }
-    const first = seen.get(reg);
+    const first = seen.get(jumper);
     if (first !== undefined) {
-      invalid.push({ line: r.line, message: `Duplicate vehicle ${reg} (first on row ${first})` });
+      invalid.push({ line: r.line, message: `Duplicate jumper no ${jumper} (first on row ${first})` });
       continue;
     }
-    seen.set(reg, r.line);
+    seen.set(jumper, r.line);
     valid.push({
       line: r.line,
+      jumper_no: jumper,
       registration_no: reg,
       document_status: cell(r, col.document_status),
       district,
@@ -295,6 +313,6 @@ export async function parseVehicleFile(file: File | null | undefined): Promise<P
 }
 
 export const TEMPLATE_CSV =
-  "Vehicle No,Documents Original Submitted,Date of Entry,District,Traffic Station,Name\r\n" +
-  'LEA-1234,"CNIC, Original Registration Book, Fitness Form",17/11/2026,Lahore,Model Town,Ali Raza\r\n' +
-  "LEB-5678,CNIC,17/11/2026,Kasur,City Station,Usman Khan\r\n";
+  "Jumper No,Vehicle No,Documents Original Submitted,Date of Entry,District,Traffic Station,Collected By\r\n" +
+  'J-1001,LEA-1234,"CNIC, Original Registration Book",17/11/2026,Lahore,Model Town,Ali Raza\r\n' +
+  "J-1002,LEB-5678,CNIC,17/11/2026,Kasur,City Station,Usman Khan\r\n";

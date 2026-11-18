@@ -152,7 +152,7 @@ export default function UserManager({ viewerRole, flash }: Props) {
               <>
                 <b>{dialog.user.username}</b> loses access immediately.
                 {dialog.user.role === "inspector" && " Their assistants are removed too."} Entries and verifications
-                they made stay in the register.
+                they made stay in CFX.
               </>
             }
             confirmLabel="Remove"

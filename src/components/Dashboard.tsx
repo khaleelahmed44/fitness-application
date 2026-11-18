@@ -5,7 +5,11 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
 import {
+  ArrowLeft,
   BadgeCheck,
+  CheckCheck,
+  FolderArchive,
+  Send,
   CalendarPlus,
   ClipboardList,
   FileUp,
@@ -25,18 +29,20 @@ import {
   deleteVehicle,
   deleteVehicles,
   importVehicles,
+  moveAll,
+  sendForVerification,
   updateVehicle,
   setVerification,
   type ImportRow,
 } from "@/lib/vehicle-actions";
 import { exportList, exportRecord, type ExportFormat } from "@/lib/export";
 import { suggestionsFor, type SuggestField } from "@/lib/suggestions";
-import { canDelete, canEdit, canVerify, type Profile, type Vehicle, type VehicleInput } from "@/types/database";
+import { canDelete, canEdit, canSend, canVerify, type Profile, type Vehicle, type VehicleInput } from "@/types/database";
 import VehicleGrid from "./VehicleGrid";
 import EntryModal from "./EntryModal";
 import ImportModal from "./ImportModal";
 import ConfirmModal from "./ConfirmModal";
-import VerifyModal from "./VerifyModal";
+import DailyFiles from "./DailyFiles";
 import ExportMenu, { type ExportScope } from "./ExportMenu";
 import AnimatedNumber from "./AnimatedNumber";
 import { buildColumns, type TabKey } from "./columns";
@@ -47,13 +53,24 @@ interface Props {
 }
 
 const TAB_LABELS: Record<TabKey, string> = {
-  pending: "Pending / Not Verified",
-  passed: "Verified / Passed",
+  draft: "Working Queue",
+  pending: "Verification Queue",
+  passed: "Verified Queue",
+  daily: "Daily Files",
 };
 
 const EMPTY_TEXT: Record<TabKey, string> = {
-  pending: "No unverified vehicles. Add a new entry to get started.",
-  passed: "No vehicles have been verified yet.",
+  draft: "Nothing in the working queue. Add a new entry or import a file.",
+  pending: "The verification queue is empty.",
+  passed: "No records have been verified yet.",
+  daily: "No records for this day.",
+};
+
+const TAB_ICON: Record<TabKey, typeof Truck> = {
+  draft: ClipboardList,
+  pending: Truck,
+  passed: BadgeCheck,
+  daily: FolderArchive,
 };
 
 type Dialog =
@@ -63,6 +80,8 @@ type Dialog =
   | { kind: "verify"; vehicle: Vehicle; to: boolean }
   | { kind: "import" }
   | { kind: "deleteAll" }
+  | { kind: "approveAll" }
+  | { kind: "sendAll" }
   | null;
 
 const todayIso = () =>
@@ -75,7 +94,8 @@ export default function Dashboard({ profile, initialVehicles }: Props) {
   const displayName = profile.full_name || profile.email || "User";
 
   const [vehicles, setVehicles] = useState<Vehicle[]>(initialVehicles);
-  const [tab, setTab] = useState<TabKey>("pending");
+  const [tab, setTab] = useState<TabKey>(profile.role === "assistant" ? "draft" : "pending");
+  const [activeDate, setActiveDate] = useState<string | null>(null);
   const [dialog, setDialog] = useState<Dialog>(null);
   const [search, setSearch] = useState("");
   const [drawer, setDrawer] = useState(false);
@@ -120,11 +140,20 @@ export default function Dashboard({ profile, initialVehicles }: Props) {
     );
 
   // ---- handlers -------------------------------------------------------
+  /** Assistants log into the working queue; inspectors / admins may enter straight into the verification queue. */
+  const entryStage = verifier ? "pending" : "draft";
+
   const handleAdd = async (input: VehicleInput) => {
-    const created = await addVehicle(supabase, input);
+    const created = await addVehicle(supabase, input, entryStage);
     upsertLocal(created);
-    setTab("pending");
-    flash("ok", `${created.registration_no} added to the pending queue.`);
+    setTab(entryStage);
+    setActiveDate(null);
+    flash(
+      "ok",
+      entryStage === "draft"
+        ? `${created.registration_no} (${created.jumper_no}) added to the Working Queue. Send it for verification when ready.`
+        : `${created.registration_no} (${created.jumper_no}) added to the Verification Queue.`
+    );
   };
 
   const handleEdit = async (id: number, input: VehicleInput) => {
@@ -160,32 +189,62 @@ export default function Dashboard({ profile, initialVehicles }: Props) {
     }
   };
 
-  const handleSetVerified = async (v: Vehicle, verified: boolean, collectedBy?: string) => {
+  const handleSetVerified = async (v: Vehicle, verified: boolean) => {
     setBusyId(v.id);
     try {
-      const updated = await setVerification(supabase, v.id, verified, collectedBy);
+      const updated = await setVerification(supabase, v.id, verified);
       upsertLocal(updated);
-      setTab(verified ? "passed" : "pending");
       flash(
         "ok",
         verified
-          ? `Verified. Certificate ${updated.certificate_no} issued.`
-          : `${updated.registration_no} marked Not Verified and moved back to Pending.`
+          ? `Approved. Certificate ${updated.certificate_no} issued for ${updated.jumper_no}.`
+          : `${updated.jumper_no} returned to the Verification Queue.`
       );
     } catch (err) {
       await refresh();
-      throw err;
+      flash("err", err instanceof Error ? err.message : "Could not change verification");
     } finally {
       setBusyId(null);
     }
   };
 
+  const handleSend = async (v: Vehicle) => {
+    setBusyId(v.id);
+    try {
+      upsertLocal(await sendForVerification(supabase, v.id));
+      flash("ok", `${v.jumper_no} sent to the inspector Verification Queue.`);
+    } catch (err) {
+      await refresh();
+      flash("err", err instanceof Error ? err.message : "Could not send for verification");
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const handleSendAll = async () => {
+    const ids = rows.filter((r) => r.status === "draft" && canSend(r, profile.id, profile.role)).map((r) => r.id);
+    const moved = await moveAll(supabase, ids, "draft", "pending");
+    moved.forEach(upsertLocal);
+    flash("ok", `${moved.length} entr${moved.length === 1 ? "y" : "ies"} sent to the Verification Queue.`);
+  };
+
+  const handleApproveAll = async () => {
+    const ids = rows.filter((r) => r.status === "pending").map((r) => r.id);
+    const moved = await moveAll(supabase, ids, "pending", "passed");
+    moved.forEach(upsertLocal);
+    flash("ok", `Approved ${moved.length} record${moved.length === 1 ? "" : "s"}. Certificates issued.`);
+  };
+
   const handleImport = async (rows: ImportRow[]) => {
-    const res = await importVehicles(supabase, rows);
+    const res = await importVehicles(supabase, rows, entryStage);
     res.inserted.forEach(upsertLocal);
     if (res.inserted.length > 0) {
-      flash("ok", `Imported ${res.inserted.length} vehicle(s) into the pending queue.`);
-      setTab("pending");
+      flash(
+        "ok",
+        `Imported ${res.inserted.length} record(s) into the ${entryStage === "draft" ? "Working" : "Verification"} Queue.`
+      );
+      setTab(entryStage);
+      setActiveDate(null);
     }
     return res;
   };
@@ -194,7 +253,10 @@ export default function Dashboard({ profile, initialVehicles }: Props) {
     try {
       const sorted = [...vehicles].sort((a, b) => a.id - b.id);
       const tab = scope === "verified" ? "passed" : scope === "pending" ? "pending" : "all";
-      const subset = sorted.filter((v) => (tab === "all" ? true : v.status === tab));
+      // "pending" scope = everything not yet verified (working + verification queue)
+      const subset = sorted.filter((v) =>
+        tab === "all" ? true : tab === "passed" ? v.status === "passed" : v.status !== "passed"
+      );
       await exportList(format, tab, subset);
     } catch (err) {
       flash("err", err instanceof Error ? err.message : "Export failed");
@@ -220,6 +282,7 @@ export default function Dashboard({ profile, initialVehicles }: Props) {
     const today = todayIso();
     return {
       total: vehicles.length,
+      draft: vehicles.filter((v) => v.status === "draft").length,
       pending: vehicles.filter((v) => v.status === "pending").length,
       passed: vehicles.filter((v) => v.status === "passed").length,
       today: vehicles.filter((v) => v.date_of_entry === today).length,
@@ -230,9 +293,10 @@ export default function Dashboard({ profile, initialVehicles }: Props) {
     const q = search.trim().toLowerCase();
     return vehicles.filter(
       (v) =>
-        v.status === tab &&
+        (tab === "daily" ? v.date_of_entry === activeDate : v.status === tab) &&
         (!q ||
           [
+            v.jumper_no,
             v.registration_no,
             v.district,
             v.traffic_station,
@@ -245,12 +309,14 @@ export default function Dashboard({ profile, initialVehicles }: Props) {
             .filter(Boolean)
             .some((f) => String(f).toLowerCase().includes(q)))
     );
-  }, [vehicles, tab, search]);
+  }, [vehicles, tab, search, activeDate]);
 
-  const existingPlates = useMemo(
-    () => new Set(vehicles.filter((v) => v.status === "pending").map((v) => v.registration_no.toUpperCase())),
+  const existingJumpers = useMemo(
+    () => new Set(vehicles.map((v) => v.jumper_no.toUpperCase())),
     [vehicles]
   );
+  const countFor = (t: TabKey) =>
+    t === "draft" ? counts.draft : t === "pending" ? counts.pending : t === "passed" ? counts.passed : counts.total;
 
   const suggest = useMemo(() => {
     const fields: SuggestField[] = [
@@ -271,9 +337,12 @@ export default function Dashboard({ profile, initialVehicles }: Props) {
       buildColumns(tab, {
         canEdit: (v) => canEdit(v, profile.id, profile.role),
         canDelete: () => canDelete(profile.role),
-        canToggle: () => verifier,
+        canVerify: verifier,
+        canSend: (v) => canSend(v, profile.id, profile.role),
         busyId,
-        onToggleVerify: (v) => setDialog({ kind: "verify", vehicle: v, to: v.status !== "passed" }),
+        onSend: (v) => void handleSend(v),
+        onApprove: (v) => void handleSetVerified(v, true),
+        onUnverify: (v) => setDialog({ kind: "verify", vehicle: v, to: false }),
         onEdit: (v) => setDialog({ kind: "edit", vehicle: v }),
         onDelete: (v) => setDialog({ kind: "delete", vehicle: v }),
         onExport: handleExportRecord,
@@ -283,9 +352,10 @@ export default function Dashboard({ profile, initialVehicles }: Props) {
   );
 
   const stats = [
-    { label: "Total entries", value: counts.total, Icon: ClipboardList, tone: "from-indigo-500 to-violet-500" },
-    { label: "Pending", value: counts.pending, Icon: Truck, tone: "from-amber-400 to-orange-500" },
-    { label: "Verified / Passed", value: counts.passed, Icon: BadgeCheck, tone: "from-emerald-400 to-teal-500" },
+    { label: "Total records", value: counts.total, Icon: FolderArchive, tone: "from-indigo-500 to-violet-500" },
+    { label: "Working Queue", value: counts.draft, Icon: ClipboardList, tone: "from-slate-500 to-slate-700" },
+    { label: "Verification Queue", value: counts.pending, Icon: Truck, tone: "from-amber-400 to-orange-500" },
+    { label: "Verified", value: counts.passed, Icon: BadgeCheck, tone: "from-emerald-400 to-teal-500" },
     { label: "Added today", value: counts.today, Icon: CalendarPlus, tone: "from-sky-400 to-blue-500" },
   ];
 
@@ -296,8 +366,8 @@ export default function Dashboard({ profile, initialVehicles }: Props) {
           <ShieldCheck className="h-5 w-5 text-white" />
         </div>
         <div>
-          <p className="text-sm font-semibold leading-tight text-white">Fitness Register</p>
-          <p className="text-[11px] text-indigo-200/70">Vehicle e-certificates</p>
+          <p className="text-base font-bold leading-tight tracking-wide text-white">CFX</p>
+          <p className="text-[11px] text-indigo-200/70">Document verification portal</p>
         </div>
       </div>
 
@@ -309,6 +379,7 @@ export default function Dashboard({ profile, initialVehicles }: Props) {
               key={t}
               onClick={() => {
                 setTab(t);
+                setActiveDate(null);
                 setDrawer(false);
               }}
               className={`relative flex w-full items-center justify-between rounded-xl px-3.5 py-2.5 text-sm font-medium transition ${
@@ -323,12 +394,13 @@ export default function Dashboard({ profile, initialVehicles }: Props) {
                 />
               )}
               <span className="relative flex items-center gap-2.5">
-                {t === "pending" ? <Truck className="h-4 w-4" /> : <BadgeCheck className="h-4 w-4" />}
+                {(() => {
+                  const Icon = TAB_ICON[t];
+                  return <Icon className="h-4 w-4" />;
+                })()}
                 {TAB_LABELS[t]}
               </span>
-              <span className="relative rounded-full bg-white/10 px-2 py-0.5 text-xs">
-                {t === "pending" ? counts.pending : counts.passed}
-              </span>
+              <span className="relative rounded-full bg-white/10 px-2 py-0.5 text-xs">{countFor(t)}</span>
             </button>
           );
         })}
@@ -427,7 +499,9 @@ export default function Dashboard({ profile, initialVehicles }: Props) {
               <Menu className="h-5 w-5" />
             </button>
             <div>
-              <h1 className="text-lg font-semibold text-slate-900">{TAB_LABELS[tab]}</h1>
+              <h1 className="text-lg font-semibold text-slate-900">
+                CFX · {TAB_LABELS[tab]}{tab === "daily" && activeDate ? ` · ${activeDate}` : ""}
+              </h1>
               <p className="hidden text-xs text-slate-500 sm:block">
                 Welcome back, {displayName}
               </p>
@@ -444,7 +518,7 @@ export default function Dashboard({ profile, initialVehicles }: Props) {
 
         <main className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden p-4 sm:p-6">
           {/* Animated counters */}
-          <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
+          <div className="grid grid-cols-2 gap-3 xl:grid-cols-5">
             {stats.map(({ label, value, Icon, tone }, i) => (
               <motion.div
                 key={label}
@@ -475,14 +549,17 @@ export default function Dashboard({ profile, initialVehicles }: Props) {
                   key={t}
                   role="tab"
                   aria-selected={tab === t}
-                  onClick={() => setTab(t)}
+                  onClick={() => {
+                    setTab(t);
+                    setActiveDate(null);
+                  }}
                   className={`relative px-4 py-2.5 text-sm font-medium transition ${
                     tab === t ? "text-indigo-700" : "text-slate-500 hover:text-slate-800"
                   }`}
                 >
                   {TAB_LABELS[t]}
                   <span className="ml-2 rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-600">
-                    {t === "pending" ? counts.pending : counts.passed}
+                    {countFor(t)}
                   </span>
                   {tab === t && (
                     <motion.span
@@ -494,8 +571,25 @@ export default function Dashboard({ profile, initialVehicles }: Props) {
               ))}
             </div>
 
+            {tab === "daily" && !activeDate ? (
+              <DailyFiles vehicles={vehicles} today={todayIso()} onOpen={setActiveDate} />
+            ) : (
+              <>
+                {tab === "daily" && activeDate && (
+                  <div className="flex items-center gap-3 border-b border-slate-100 px-4 py-2.5 text-sm">
+                    <button
+                      type="button"
+                      onClick={() => setActiveDate(null)}
+                      className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1 font-medium text-indigo-700 hover:bg-indigo-50"
+                    >
+                      <ArrowLeft className="h-4 w-4" /> All days
+                    </button>
+                    <span className="font-mono font-semibold text-slate-800">{activeDate}</span>
+                    <span className="text-slate-500">{activeDate === todayIso() ? "Active today" : "Archived"}</span>
+                  </div>
+                )}
             <VehicleGrid
-              key={tab}
+              key={`${tab}-${activeDate ?? ""}`}
               data={rows}
               columns={columns}
               emptyText={EMPTY_TEXT[tab]}
@@ -503,6 +597,27 @@ export default function Dashboard({ profile, initialVehicles }: Props) {
               onSearchChange={setSearch}
               actions={
                 <>
+                  {tab === "draft" && rows.some((r) => canSend(r, profile.id, profile.role)) && (
+                    <button
+                      type="button"
+                      onClick={() => setDialog({ kind: "sendAll" })}
+                      className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-3.5 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-700"
+                    >
+                      <Send className="h-4 w-4" />
+                      <span className="hidden sm:inline">Send all for verification</span>
+                    </button>
+                  )}
+                  {tab === "pending" && verifier && (
+                    <button
+                      type="button"
+                      disabled={rows.length === 0}
+                      onClick={() => setDialog({ kind: "approveAll" })}
+                      className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-3.5 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      <CheckCheck className="h-4 w-4" />
+                      <span className="hidden sm:inline">Approve all ({rows.length})</span>
+                    </button>
+                  )}
                   <button
                     type="button"
                     onClick={() => setDialog({ kind: "import" })}
@@ -523,12 +638,14 @@ export default function Dashboard({ profile, initialVehicles }: Props) {
                     </button>
                   )}
                   <ExportMenu
-                    counts={{ all: counts.total, verified: counts.passed, pending: counts.pending }}
+                    counts={{ all: counts.total, verified: counts.passed, pending: counts.draft + counts.pending }}
                     onExport={handleExportList}
                   />
                 </>
               }
             />
+              </>
+            )}
           </section>
         </main>
       </div>
@@ -558,7 +675,7 @@ export default function Dashboard({ profile, initialVehicles }: Props) {
         {dialog?.kind === "import" && (
           <ImportModal
             key="import"
-            existingPlates={existingPlates}
+            existingJumpers={existingJumpers}
             onImport={handleImport}
             onClose={() => setDialog(null)}
           />
@@ -571,8 +688,8 @@ export default function Dashboard({ profile, initialVehicles }: Props) {
             title={`Delete all ${rows.length} records?`}
             message={
               <>
-                Every record currently listed in <b>{tab === "pending" ? "Pending / Not Verified" : "Verified"}</b>
-                {search.trim() ? <> (matching your search)</> : null} will be removed from the register
+                Every record currently listed in <b>{TAB_LABELS[tab]}</b>
+                {search.trim() ? <> (matching your search)</> : null} will be removed from CFX
                 {tab === "passed" ? " and their e-certificates will no longer be valid" : ""}. Copies are kept in the
                 Admin Panel recycle bin.
               </>
@@ -589,8 +706,8 @@ export default function Dashboard({ profile, initialVehicles }: Props) {
             title="Delete this entry?"
             message={
               <>
-                <b>{dialog.vehicle.registration_no}</b> (S.No {dialog.vehicle.id}) will be removed
-                from the register{dialog.vehicle.status === "passed" ? " and its e-certificate will no longer be valid" : ""}. A
+                <b>{dialog.vehicle.jumper_no}</b> ({dialog.vehicle.registration_no}) will be removed
+                from CFX{dialog.vehicle.status === "passed" ? " and its e-certificate will no longer be valid" : ""}. A
                 copy is kept in the Admin Panel recycle bin, so it can be restored.
               </>
             }
@@ -599,12 +716,35 @@ export default function Dashboard({ profile, initialVehicles }: Props) {
             onClose={() => setDialog(null)}
           />
         )}
-        {dialog?.kind === "verify" && dialog.to && (
-          <VerifyModal
-            key="verify-on"
-            vehicle={dialog.vehicle}
-            nameSuggestions={suggest.collected_by_or_operator_name}
-            onConfirm={(name) => handleSetVerified(dialog.vehicle, true, name)}
+        {dialog?.kind === "approveAll" && (
+          <ConfirmModal
+            key="approve-all"
+            title={`Approve all ${rows.length} records?`}
+            message={
+              <>
+                Every record currently listed in the <b>Verification Queue</b>
+                {search.trim() ? <> (matching your search)</> : null} will be approved and moved to the Verified Queue,
+                and a certificate number is issued for each.
+              </>
+            }
+            confirmLabel={`Approve ${rows.length}`}
+            onConfirm={handleApproveAll}
+            onClose={() => setDialog(null)}
+          />
+        )}
+        {dialog?.kind === "sendAll" && (
+          <ConfirmModal
+            key="send-all"
+            title="Send all for verification?"
+            message={
+              <>
+                Every entry currently listed in the <b>Working Queue</b>
+                {search.trim() ? <> (matching your search)</> : null} moves to the inspector Verification Queue. You
+                will no longer be able to edit them.
+              </>
+            }
+            confirmLabel="Send all"
+            onConfirm={handleSendAll}
             onClose={() => setDialog(null)}
           />
         )}
@@ -612,14 +752,14 @@ export default function Dashboard({ profile, initialVehicles }: Props) {
           <ConfirmModal
             key="verify-off"
             danger
-            title="Mark as Not Verified?"
+            title="Unverify this record?"
             message={
               <>
-                Mark <b>{dialog.vehicle.registration_no}</b> as <b>Not Verified</b>. Its certificate (
-                {dialog.vehicle.certificate_no}) is withdrawn and the record returns to the Pending list.
+                Unverify <b>{dialog.vehicle.jumper_no}</b> ({dialog.vehicle.registration_no}). Its certificate (
+                {dialog.vehicle.certificate_no}) is withdrawn and the record returns to the Verification Queue.
               </>
             }
-            confirmLabel="Mark Not Verified"
+            confirmLabel="Unverify"
             onConfirm={() => handleSetVerified(dialog.vehicle, false)}
             onClose={() => setDialog(null)}
           />

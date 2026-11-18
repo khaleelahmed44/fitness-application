@@ -90,11 +90,11 @@ export async function exportCertificatePdf(v: Vehicle, filename: string): Promis
 
   doc.setTextColor(20, 20, 20);
   doc.setFontSize(26);
-  doc.text("Vehicle Fitness Certificate", 105, 64, { align: "center" });
+  doc.text("Verification Certificate", 105, 64, { align: "center" });
   doc.setFont("helvetica", "normal");
   doc.setFontSize(10);
   doc.setTextColor(100, 100, 100);
-  doc.text("E-Certificate of Roadworthiness", 105, 72, { align: "center" });
+  doc.text("Electronic Certificate", 105, 72, { align: "center" });
 
   doc.setFontSize(9);
   doc.text("CERTIFICATE NO.", 105, 90, { align: "center" });
@@ -107,7 +107,7 @@ export async function exportCertificatePdf(v: Vehicle, filename: string): Promis
   doc.setFontSize(11);
   doc.setTextColor(40, 40, 40);
   doc.text(
-    "This is to certify that the vehicle described below has been verified and found FIT for road use as of the date of inspection.",
+    "This is to certify that the vehicle described below has been VERIFIED by CFX as of the date of verification.",
     105,
     116,
     { align: "center", maxWidth: 150 }
@@ -133,7 +133,7 @@ export async function exportCertificatePdf(v: Vehicle, filename: string): Promis
   doc.text(v.verified_by_name ?? "", 25, 250);
   doc.setFontSize(8);
   doc.setTextColor(110, 110, 110);
-  doc.text("VERIFYING OFFICER", 25, 257);
+  doc.text("VERIFIED BY", 25, 257);
   doc.text(`Issued electronically on ${fmtLong(issued)}`, 185, 250, { align: "right" });
   doc.text(`Verify using certificate no. ${v.certificate_no ?? ""}`, 185, 256, { align: "right" });
 

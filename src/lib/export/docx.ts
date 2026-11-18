@@ -136,7 +136,7 @@ export async function exportCertificateDocx(v: Vehicle, filename: string): Promi
 
   const doc = new Document({
     creator: authorityName(),
-    title: `Fitness Certificate ${v.certificate_no ?? ""}`,
+    title: `Verification Certificate ${v.certificate_no ?? ""}`,
     sections: [
       {
         children: [
@@ -144,12 +144,12 @@ export async function exportCertificateDocx(v: Vehicle, filename: string): Promi
             ? [centered(authoritySubtitle().toUpperCase(), { size: 20, color: NAVY })]
             : []),
           centered(authorityName().toUpperCase(), { size: 34, bold: true, color: NAVY, after: 300 }),
-          centered("Vehicle Fitness Certificate", { size: 52, bold: true, before: 200 }),
-          centered("E-Certificate of Roadworthiness", { size: 20, color: "666666", after: 400 }),
+          centered("Verification Certificate", { size: 52, bold: true, before: 200 }),
+          centered("Electronic Certificate", { size: 20, color: "666666", after: 400 }),
           centered("CERTIFICATE NO.", { size: 18, color: "666666" }),
           centered(v.certificate_no ?? "", { size: 44, bold: true, color: NAVY, after: 300 }),
           centered(
-            "This is to certify that the vehicle described below has been verified and found FIT for road use as of the date of inspection.",
+            "This is to certify that the vehicle described below has been VERIFIED by CFX as of the date of verification.",
             { size: 22, after: 300 }
           ),
           keyValueTable(certificateRows(v)),
@@ -158,7 +158,7 @@ export async function exportCertificateDocx(v: Vehicle, filename: string): Promi
             children: [new TextRun({ text: v.verified_by_name ?? "", size: 26 })],
           }),
           new Paragraph({
-            children: [new TextRun({ text: "VERIFYING OFFICER", size: 16, color: "666666" })],
+            children: [new TextRun({ text: "VERIFIED BY", size: 16, color: "666666" })],
           }),
           new Paragraph({
             spacing: { before: 200 },

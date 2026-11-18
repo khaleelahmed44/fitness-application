@@ -54,7 +54,7 @@ export default function LoginPage() {
           >
             <ShieldCheck className="h-7 w-7 text-white" />
           </motion.div>
-          <h1 className="mt-4 text-xl font-bold text-slate-900">Vehicle Fitness Register</h1>
+          <h1 className="mt-4 text-xl font-bold text-slate-900">CFX</h1>
           <p className="mt-1 text-sm text-slate-500">
             Sign in with your username and password
           </p>

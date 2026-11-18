@@ -15,7 +15,7 @@ interface Props {
   maxLength?: number;
   autoFocus?: boolean;
   uppercase?: boolean;
-  /** Free-text list: picking a single item appends it ("CNIC, Fitness Form") */
+  /** Free-text list: picking a single item appends it ("CNIC, Original Book") */
   multi?: boolean;
 }
 

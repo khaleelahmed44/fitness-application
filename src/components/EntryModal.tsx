@@ -21,6 +21,7 @@ const todayLabel = () =>
   new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "long", year: "numeric" });
 
 export default function EntryModal({ mode, initial, defaultName, suggest, onSubmit, onClose }: Props) {
+  const [jumper, setJumper] = useState(initial?.jumper_no ?? "");
   const [plate, setPlate] = useState(initial?.registration_no ?? "");
   const [docs, setDocs] = useState(initial?.document_status ?? "");
   const [district, setDistrict] = useState(initial?.district ?? "");
@@ -32,14 +33,23 @@ export default function EntryModal({ mode, initial, defaultName, suggest, onSubm
   const [plateKey, setPlateKey] = useState(0);
 
   async function save(another: boolean) {
+    if (!jumper.trim()) {
+      setError("Jumper No is required (the unique token number of this visit).");
+      return;
+    }
     if (!plate.trim()) {
       setError("Vehicle No is required.");
+      return;
+    }
+    if (!name.trim()) {
+      setError("Collected By is required.");
       return;
     }
     setBusy(true);
     setError(null);
     try {
       await onSubmit({
+        jumper_no: jumper,
         registration_no: plate,
         document_status: docs,
         district,
@@ -47,7 +57,8 @@ export default function EntryModal({ mode, initial, defaultName, suggest, onSubm
         collected_by_or_operator_name: name,
       });
       if (another) {
-        // Keep district / station / name / docs for rapid register-style entry
+        // Keep district / station / collected by / docs for rapid entry
+        setJumper("");
         setPlate("");
         setPlateKey((k) => k + 1);
         setAdded((n) => n + 1);
@@ -81,6 +92,18 @@ export default function EntryModal({ mode, initial, defaultName, suggest, onSubm
       >
         <div className="grid gap-5 sm:grid-cols-2">
           <SuggestInput
+            key={`j${plateKey}`}
+            label="Jumper No (unique token)"
+            value={jumper}
+            onChange={setJumper}
+            suggestions={[]}
+            placeholder="e.g. J-1001"
+            maxLength={50}
+            required
+            uppercase
+            autoFocus
+          />
+          <SuggestInput
             key={plateKey}
             label="Vehicle No"
             value={plate}
@@ -89,7 +112,6 @@ export default function EntryModal({ mode, initial, defaultName, suggest, onSubm
             placeholder="e.g. LEA-1234"
             required
             uppercase
-            autoFocus
           />
 
           <SuggestInput
@@ -97,7 +119,7 @@ export default function EntryModal({ mode, initial, defaultName, suggest, onSubm
             value={docs}
             onChange={setDocs}
             suggestions={suggest.document_status}
-            placeholder="e.g. CNIC, Original Registration Book, Fitness Form"
+            placeholder="e.g. CNIC, Original Registration Book"
             maxLength={300}
             multi
           />
@@ -120,12 +142,13 @@ export default function EntryModal({ mode, initial, defaultName, suggest, onSubm
           />
           <div className="sm:col-span-2">
             <SuggestInput
-              label="Name (data entry / collected by)"
+              label="Collected By (assistant who received the documents)"
               value={name}
               onChange={setName}
               suggestions={suggest.collected_by_or_operator_name}
-              placeholder="Person who collected the vehicle"
+              placeholder="Assistant name"
               maxLength={80}
+              required
             />
           </div>
         </div>
