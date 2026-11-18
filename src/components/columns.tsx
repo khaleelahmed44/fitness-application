@@ -58,10 +58,6 @@ export function buildColumns(tab: TabKey, o: Options): ColumnDef<Vehicle, any>[]
       cell: (c) => <span className="tabular-nums text-slate-500">{c.getValue()}</span>,
     }),
     h.accessor("jumper_no", {
-      header: "Jumper No",
-      cell: (c) => <span className="font-mono text-xs font-semibold text-indigo-700">{c.getValue()}</span>,
-    }),
-    h.accessor("registration_no", {
       header: "Vehicle No",
       cell: (c) => <span className="font-semibold text-slate-900">{c.getValue()}</span>,
     }),
@@ -116,7 +112,7 @@ export function buildColumns(tab: TabKey, o: Options): ColumnDef<Vehicle, any>[]
               <button
                 onClick={() => o.onSend(v)}
                 disabled={o.busyId === v.id}
-                title="Send this entry to the inspector verification queue"
+                title="Send this entry to Pending for inspector verification"
                 className="mr-1 inline-flex items-center gap-1 whitespace-nowrap rounded-lg bg-indigo-600 px-3 py-1 text-xs font-semibold text-white shadow-sm transition hover:bg-indigo-700 disabled:opacity-40"
               >
                 <Send className="h-3.5 w-3.5" />
@@ -146,7 +142,7 @@ export function buildColumns(tab: TabKey, o: Options): ColumnDef<Vehicle, any>[]
               </a>
             )}
             {v.status === "passed" && o.canVerify && (
-              <button className={iconBtn} title="Unverify (return to verification queue)" onClick={() => o.onUnverify(v)}>
+              <button className={iconBtn} title="Unverify (return to Pending)" onClick={() => o.onUnverify(v)}>
                 <Undo2 className="h-4 w-4" />
               </button>
             )}

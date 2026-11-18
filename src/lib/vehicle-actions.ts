@@ -8,8 +8,9 @@ const clean = (s: string) => s.trim().replace(/\s+/g, " ");
 
 function payload(i: VehicleInput) {
   return {
+    // "Vehicle No" is the single unique identifier; the legacy plate column mirrors it.
     jumper_no: normalise(i.jumper_no),
-    registration_no: normalise(i.registration_no),
+    registration_no: normalise(i.jumper_no),
     document_status: clean(i.document_status).replace(/[,;\s]+$/, ""),
     district: clean(i.district) || null,
     traffic_station: clean(i.traffic_station) || null,
@@ -20,7 +21,7 @@ function payload(i: VehicleInput) {
 
 function explain(error: { code?: string; message: string }): ActionError {
   if (error.code === "23505") {
-    return new ActionError("This Jumper No is already in use. Every visit needs its own unique jumper number.");
+    return new ActionError("This Vehicle No already exists. Every record needs its own unique Vehicle No.");
   }
   if (error.code === "42501") {
     return new ActionError("You are not authorised to do this.");
@@ -155,7 +156,7 @@ export interface ImportResult {
   failed: { line: number; message: string }[];
 }
 
-/** Bulk insert into the pending queue; falls back to row-by-row if a chunk is rejected. */
+/** Bulk insert into the working queue; falls back to row-by-row if a chunk is rejected. */
 export async function importVehicles(
   supabase: SupabaseClient,
   rows: ImportRow[],
@@ -183,7 +184,7 @@ export async function importVehicles(
       if (err) {
         failed.push({
           line: chunk[j].line,
-          message: err.code === "23505" ? "Jumper No is already in use" : err.message,
+          message: err.code === "23505" ? "Vehicle No already exists" : err.message,
         });
       } else {
         inserted.push(one as Vehicle);

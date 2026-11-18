@@ -15,7 +15,7 @@ export interface Profile {
 export interface Vehicle {
   /** S.No */
   id: number;
-  /** Unique jumper / token number of this visit (records are tracked by this, not by vehicle no) */
+  /** Vehicle No: the single unique identifier of a record (legacy column name) */
   jumper_no: string;
   /** Vehicle No */
   registration_no: string;
@@ -64,7 +64,7 @@ export function canSend(v: Vehicle, userId: string, role: Role): boolean {
 
 export const STATUS_LABEL: Record<VehicleStatus, string> = {
   draft: "Working",
-  pending: "In Verification Queue",
+  pending: "Pending",
   passed: "Verified",
 };
 

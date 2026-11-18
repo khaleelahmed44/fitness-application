@@ -46,7 +46,7 @@ export default function DailyFiles({ vehicles, today, onOpen }: Props) {
   return (
     <div className="thin-scroll min-h-0 flex-1 overflow-auto p-4 sm:p-5">
       <p className="mb-4 text-sm text-slate-500">
-        Every entry is filed under the date it was logged. Open a day to see its working, in-queue and verified records.
+        Every entry is filed under the date it was logged. Open a day to see its working, pending and verified records.
       </p>
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
         {folders.map((f, i) => {
@@ -92,7 +92,7 @@ export default function DailyFiles({ vehicles, today, onOpen }: Props) {
                 </div>
                 <div className="rounded-lg bg-amber-50 py-1.5">
                   <p className="text-base font-bold tabular-nums text-amber-700">{f.queue}</p>
-                  <p className="text-amber-700/80">In queue</p>
+                  <p className="text-amber-700/80">Pending</p>
                 </div>
                 <div className="rounded-lg bg-emerald-50 py-1.5">
                   <p className="text-base font-bold tabular-nums text-emerald-700">{f.verified}</p>

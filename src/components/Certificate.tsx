@@ -12,8 +12,7 @@ export default function Certificate({ vehicle }: { vehicle: Vehicle }) {
   expiry.setMonth(expiry.getMonth() + months);
 
   const rows: [string, string][] = [
-    ["Jumper No", vehicle.jumper_no],
-    ["Vehicle No", vehicle.registration_no],
+    ["Vehicle No", vehicle.jumper_no],
     ["Documents Original Submitted", vehicle.document_status || "—"],
     ["Date of Entry", fmt(new Date(`${vehicle.date_of_entry}T00:00:00`))],
     ["District", vehicle.district ?? "—"],

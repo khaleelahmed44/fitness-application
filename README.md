@@ -3,22 +3,22 @@
 A spreadsheet-style web portal where assistants log records, send them for verification, and inspectors approve them.
 Stack: Next.js 15 (App Router, TypeScript), Tailwind, TanStack Table, framer-motion, Supabase (Postgres + Auth + RLS), Vercel.
 
-## Workflow
+## Workflow (tabs: Working · Pending · Verified · Daily Files)
 
-1. **Assistant** logs an entry (*Working Queue*) and clicks **Send for Verification** (per entry, or *Send all*).
-2. The entry moves to the **Verification Queue** (Inspector / Admin).
-3. Inspector or Admin clicks **Approve** (one click) or **Approve all**; a certificate number is issued and the record moves to the **Verified Queue**. *Unverify* returns it to the queue.
+1. **Assistant** logs an entry in **Working** and clicks **Send for Verification** (per entry, or *Send all*).
+2. The entry moves to **Pending** (Inspector / Admin).
+3. Inspector or Admin clicks **Approve** (one click) or **Approve all**; a certificate number is issued and the record moves to **Verified**. *Unverify* returns it to Pending.
 4. **Daily Files**: every record is filed under the date it was logged (`YYYY-MM-DD`). Today's folder is active, earlier days are archived; open a day to see its records.
 
 Every record carries **Collected By** (mandatory: the assistant who received the documents).
 
-## Unique Jumper No
+## Vehicle No
 
-Records are identified by a unique **Jumper No** (the physical token of each visit), **not** by vehicle number. The same vehicle can come back on a later visit with a new jumper without being merged into earlier history. Duplicate jumper numbers are rejected by the database.
+**Vehicle No** is the single unique identifier of a record; duplicates are rejected by the database.
 
 ## Columns
 
-S.No (auto) · Jumper No · Vehicle No · Documents Original Submitted (free text, with suggestions) · Date of Entry (auto) · District · Traffic Station · Collected By · Status.
+S.No (auto) · Vehicle No · Documents Original Submitted (free text, with suggestions) · Date of Entry (auto) · District · Traffic Station · Collected By · Status.
 
 ## Roles (username + password, no email OTP)
 
@@ -32,12 +32,12 @@ S.No (auto) · Jumper No · Vehicle No · Documents Original Submitted (free tex
 
 ## Import / export
 
-- **Import** `.xlsx` / `.csv` with a header row. Required columns: **Jumper No**, **Vehicle No**, **Collected By**. Optional: Documents Original Submitted, Date of Entry (DD/MM/YYYY), District, Traffic Station. Imported rows land in the Working Queue. "Download template" gives a sample.
+- **Import** `.xlsx` / `.csv` with a header row. Required columns: **Vehicle No** (unique), **Collected By**. Optional: Documents Original Submitted, Date of Entry (DD/MM/YYYY), District, Traffic Station. Imported rows land in Working. "Download template" gives a sample.
 - **Export** (Excel, Word, PDF): *Export all*, *Verified only*, *Non-verified only*; every row also has its own PDF / Excel / Word download (verified rows download the certificate).
 
 ## Database setup
 
-Run `supabase/migrations/001` … `008` in order in the Supabase SQL editor (008 = CFX workflow: working queue, jumper number). Then seed the single admin (an auth user + `profiles.role = 'admin'`).
+Run `supabase/migrations/001` … `009` in order in the Supabase SQL editor (008 = CFX workflow, 009 = Vehicle No is the unique identifier). Then seed the single admin (an auth user + `profiles.role = 'admin'`).
 
 ## Run locally
 

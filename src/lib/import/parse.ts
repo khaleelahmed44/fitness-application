@@ -32,11 +32,9 @@ interface RawRow {
 const key = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
 
 const ALIASES = {
-  jumper_no: ["jumperno", "jumpernumber", "jumper", "jumperid", "tokenno", "tokennumber", "token"],
-  registration_no: [
-    "registrationno", "registrationnumber", "registration", "regno", "regnumber",
-    "reg", "numberplate", "plateno", "platenumber", "plate", "vehicleno",
-    "vehiclenumber", "registrationnoplate",
+  jumper_no: [
+    "vehicleno", "vehiclenumber", "registrationno", "registrationnumber", "regno", "regnumber", "reg",
+    "numberplate", "plateno", "platenumber", "plate", "registrationnoplate", "jumperno", "jumpernumber", "jumper",
   ],
   document_status: [
     "documentstatus", "documentsstatus", "documents", "document", "docs", "docstatus",
@@ -219,13 +217,12 @@ export async function parseVehicleFile(file: File | null | undefined): Promise<P
 
   // The header row is the first of the top rows that contains a Vehicle No column
   // (so a title line above the headers does not break the import).
-  let headerIdx = rows.slice(0, 10).findIndex((r) => findColumn(r.cells, "registration_no") >= 0);
+  let headerIdx = rows.slice(0, 10).findIndex((r) => findColumn(r.cells, "jumper_no") >= 0);
   if (headerIdx < 0) headerIdx = 0;
   const header = rows[headerIdx];
   const data = rows.slice(headerIdx + 1);
   const col = {
     jumper_no: findColumn(header.cells, "jumper_no"),
-    registration_no: findColumn(header.cells, "registration_no"),
     document_status: findColumn(header.cells, "document_status"),
     date_of_entry: findColumn(header.cells, "date_of_entry"),
     district: findColumn(header.cells, "district"),
@@ -233,14 +230,9 @@ export async function parseVehicleFile(file: File | null | undefined): Promise<P
     collected_by_or_operator_name: findColumn(header.cells, "collected_by_or_operator_name"),
   };
 
-  if (col.registration_no < 0) {
-    throw new Error(
-      "Missing column: Vehicle No. The first row of the file must be a header row (see the template)."
-    );
-  }
   if (col.jumper_no < 0) {
     throw new Error(
-      "Missing column: Jumper No (the unique token number of each visit). Add a JUMPER NO column to the header row (see the template)."
+      "Missing column: Vehicle No. The first row of the file must be a header row with a VEHICLE NO column (see the template)."
     );
   }
   if (col.collected_by_or_operator_name < 0) {
@@ -256,29 +248,24 @@ export async function parseVehicleFile(file: File | null | undefined): Promise<P
 
   const valid: ParsedRow[] = [];
   const invalid: ParseResult["invalid"] = [];
-  const seen = new Map<string, number>(); // unique key = Jumper No (a vehicle may return on another visit)
+  const seen = new Map<string, number>(); // unique key = Jumper No (each Vehicle No is unique)
 
   for (const r of data) {
     const jumper = normaliseField(cell(r, col.jumper_no));
-    const reg = normaliseField(cell(r, col.registration_no));
     const district = cell(r, col.district);
     const station = cell(r, col.traffic_station);
     const name = cell(r, col.collected_by_or_operator_name);
     const rawDate = cell(r, col.date_of_entry);
 
-    if (!reg) {
-      invalid.push({ line: r.line, message: "Missing vehicle no" });
-      continue;
-    }
     if (!jumper) {
-      invalid.push({ line: r.line, message: "Missing jumper no" });
+      invalid.push({ line: r.line, message: "Missing vehicle no" });
       continue;
     }
     if (!name) {
       invalid.push({ line: r.line, message: "Missing Collected By" });
       continue;
     }
-    if ([jumper, reg, district, station, name].some((v) => v.length > MAX_FIELD_LENGTH)) {
+    if ([jumper, district, station, name].some((v) => v.length > MAX_FIELD_LENGTH)) {
       invalid.push({ line: r.line, message: `A value is longer than ${MAX_FIELD_LENGTH} characters` });
       continue;
     }
@@ -293,14 +280,14 @@ export async function parseVehicleFile(file: File | null | undefined): Promise<P
     }
     const first = seen.get(jumper);
     if (first !== undefined) {
-      invalid.push({ line: r.line, message: `Duplicate jumper no ${jumper} (first on row ${first})` });
+      invalid.push({ line: r.line, message: `Duplicate vehicle no ${jumper} (first on row ${first})` });
       continue;
     }
     seen.set(jumper, r.line);
     valid.push({
       line: r.line,
       jumper_no: jumper,
-      registration_no: reg,
+      registration_no: jumper,
       document_status: cell(r, col.document_status),
       district,
       traffic_station: station,
@@ -313,6 +300,6 @@ export async function parseVehicleFile(file: File | null | undefined): Promise<P
 }
 
 export const TEMPLATE_CSV =
-  "Jumper No,Vehicle No,Documents Original Submitted,Date of Entry,District,Traffic Station,Collected By\r\n" +
-  'J-1001,LEA-1234,"CNIC, Original Registration Book",17/11/2026,Lahore,Model Town,Ali Raza\r\n' +
-  "J-1002,LEB-5678,CNIC,17/11/2026,Kasur,City Station,Usman Khan\r\n";
+  "Vehicle No,Documents Original Submitted,Date of Entry,District,Traffic Station,Collected By\r\n" +
+  'LEA-1234,"CNIC, Original Registration Book",17/11/2026,Lahore,Model Town,Ali Raza\r\n' +
+  "LEB-5678,CNIC,17/11/2026,Kasur,City Station,Usman Khan\r\n";

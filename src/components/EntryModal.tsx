@@ -22,7 +22,6 @@ const todayLabel = () =>
 
 export default function EntryModal({ mode, initial, defaultName, suggest, onSubmit, onClose }: Props) {
   const [jumper, setJumper] = useState(initial?.jumper_no ?? "");
-  const [plate, setPlate] = useState(initial?.registration_no ?? "");
   const [docs, setDocs] = useState(initial?.document_status ?? "");
   const [district, setDistrict] = useState(initial?.district ?? "");
   const [station, setStation] = useState(initial?.traffic_station ?? "");
@@ -34,10 +33,6 @@ export default function EntryModal({ mode, initial, defaultName, suggest, onSubm
 
   async function save(another: boolean) {
     if (!jumper.trim()) {
-      setError("Jumper No is required (the unique token number of this visit).");
-      return;
-    }
-    if (!plate.trim()) {
       setError("Vehicle No is required.");
       return;
     }
@@ -50,7 +45,7 @@ export default function EntryModal({ mode, initial, defaultName, suggest, onSubm
     try {
       await onSubmit({
         jumper_no: jumper,
-        registration_no: plate,
+        registration_no: jumper,
         document_status: docs,
         district,
         traffic_station: station,
@@ -59,7 +54,6 @@ export default function EntryModal({ mode, initial, defaultName, suggest, onSubm
       if (another) {
         // Keep district / station / collected by / docs for rapid entry
         setJumper("");
-        setPlate("");
         setPlateKey((k) => k + 1);
         setAdded((n) => n + 1);
       } else {
@@ -93,27 +87,16 @@ export default function EntryModal({ mode, initial, defaultName, suggest, onSubm
         <div className="grid gap-5 sm:grid-cols-2">
           <SuggestInput
             key={`j${plateKey}`}
-            label="Jumper No (unique token)"
+            label="Vehicle No"
             value={jumper}
             onChange={setJumper}
             suggestions={[]}
-            placeholder="e.g. J-1001"
+            placeholder="e.g. LEA-1234"
             maxLength={50}
             required
             uppercase
             autoFocus
           />
-          <SuggestInput
-            key={plateKey}
-            label="Vehicle No"
-            value={plate}
-            onChange={setPlate}
-            suggestions={suggest.registration_no}
-            placeholder="e.g. LEA-1234"
-            required
-            uppercase
-          />
-
           <SuggestInput
             label="Documents Original Submitted"
             value={docs}

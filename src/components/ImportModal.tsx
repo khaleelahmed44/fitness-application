@@ -7,7 +7,7 @@ import { downloadBlob } from "@/lib/export/download";
 import type { ImportResult, ImportRow } from "@/lib/vehicle-actions";
 
 interface Props {
-  /** Upper-cased jumper numbers already in the register */
+  /** Upper-cased vehicle numbers already in the register */
   existingJumpers: Set<string>;
   onImport: (rows: ImportRow[]) => Promise<ImportResult>;
   onClose: () => void;
@@ -37,12 +37,12 @@ export default function ImportModal({ existingJumpers, onImport, onClose }: Prop
     setBusy(true);
     try {
       const parsed = await parseVehicleFile(file);
-      // Skip jumper numbers that are already in the register
+      // Skip vehicle numbers that are already in the register
       const valid: ParseResult["valid"] = [];
       const invalid = [...parsed.invalid];
       for (const r of parsed.valid) {
         if (existingJumpers.has(r.jumper_no)) {
-          invalid.push({ line: r.line, message: `Jumper ${r.jumper_no} is already in the register` });
+          invalid.push({ line: r.line, message: `Vehicle ${r.jumper_no} is already in the register` });
         } else valid.push(r);
       }
       invalid.sort((a, b) => a.line - b.line);
@@ -77,9 +77,9 @@ export default function ImportModal({ existingJumpers, onImport, onClose }: Prop
           <>
             <p className="text-slate-600">
               Upload an Excel (<b>.xlsx</b>) or <b>.csv</b> file with a header row. Columns:{" "}
-              <b>Jumper No</b> (required, unique per visit), <b>Vehicle No</b> (required), <b>Collected By</b> (required),{" "}
+              <b>Vehicle No</b> (required, must be unique), <b>Collected By</b> (required),{" "}
               <b>Documents Original Submitted</b>, <b>Date of Entry</b>, <b>District</b> and <b>Traffic Station</b>.
-              Valid rows go to the Working Queue; send them for verification afterwards.
+              Valid rows go to the Working tab; send them for verification afterwards.
             </p>
             <div className="flex flex-wrap items-center gap-3">
               <input
@@ -179,8 +179,8 @@ export default function ImportModal({ existingJumpers, onImport, onClose }: Prop
         {result && (
           <div className="space-y-2">
             <p className="rounded bg-green-50 p-3 font-medium text-green-800">
-              Imported {result.inserted} vehicle{result.inserted === 1 ? "" : "s"} into the pending
-              queue.
+              Imported {result.inserted} vehicle{result.inserted === 1 ? "" : "s"} into{" "}
+              the Working tab.
             </p>
             {result.failed.length > 0 && (
               <div className="rounded border border-red-200 bg-red-50 p-2 text-xs text-red-800">

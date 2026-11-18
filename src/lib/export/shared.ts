@@ -12,7 +12,7 @@ export interface ExportColumn {
 
 export const TAB_TITLES: Record<ExportTab, string> = {
   all: "CFX – Complete Report",
-  pending: "CFX – Non-Verified Records (Working + Verification Queue)",
+  pending: "CFX – Non-Verified Records (Working + Pending)",
   passed: "CFX – Verified Records",
 };
 
@@ -39,14 +39,13 @@ export const safeName = (s: string): string =>
   s.replace(/[^a-zA-Z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "record";
 
 const statusText = (v: Vehicle) =>
-  v.status === "passed" ? "Verified" : v.status === "pending" ? "In Verification Queue" : "Working";
+  v.status === "passed" ? "Verified" : v.status === "pending" ? "Pending" : "Working";
 
 /** One unified column set: every record, verified or not, in a single table. */
 export function exportColumns(_tab?: ExportTab): ExportColumn[] {
   return [
     { header: "S.No", width: 8, get: (v) => String(v.id) },
-    { header: "Jumper No", width: 16, get: (v) => v.jumper_no },
-    { header: "Vehicle No", width: 18, get: (v) => v.registration_no },
+    { header: "Vehicle No", width: 18, get: (v) => v.jumper_no },
     { header: "Documents Original Submitted", width: 38, get: (v) => v.document_status },
     { header: "Date of Entry", width: 15, get: (v) => fmtDate(v.date_of_entry) },
     { header: "District", width: 18, get: (v) => v.district ?? "" },
@@ -70,8 +69,7 @@ export function certificateDates(v: Vehicle): { issued: Date; expiry: Date } {
 export function certificateRows(v: Vehicle): [string, string][] {
   const { issued, expiry } = certificateDates(v);
   return [
-    ["Jumper No", v.jumper_no],
-    ["Vehicle No", v.registration_no],
+    ["Vehicle No", v.jumper_no],
     ["Documents Original Submitted", v.document_status || "—"],
     ["Date of Entry", fmtDate(v.date_of_entry)],
     ["District", v.district ?? "—"],
@@ -86,8 +84,7 @@ export function certificateRows(v: Vehicle): [string, string][] {
 export function recordRows(v: Vehicle): [string, string][] {
   const rows: [string, string][] = [
     ["S.No", String(v.id)],
-    ["Jumper No", v.jumper_no],
-    ["Vehicle No", v.registration_no],
+    ["Vehicle No", v.jumper_no],
     ["Documents Original Submitted", v.document_status],
     ["Date of Entry", fmtDate(v.date_of_entry)],
     ["District", v.district ?? ""],

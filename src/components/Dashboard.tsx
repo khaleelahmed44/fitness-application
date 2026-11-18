@@ -53,15 +53,15 @@ interface Props {
 }
 
 const TAB_LABELS: Record<TabKey, string> = {
-  draft: "Working Queue",
-  pending: "Verification Queue",
-  passed: "Verified Queue",
+  draft: "Working",
+  pending: "Pending",
+  passed: "Verified",
   daily: "Daily Files",
 };
 
 const EMPTY_TEXT: Record<TabKey, string> = {
-  draft: "Nothing in the working queue. Add a new entry or import a file.",
-  pending: "The verification queue is empty.",
+  draft: "Nothing in Working. Add a new entry or import a file.",
+  pending: "Nothing is pending verification.",
   passed: "No records have been verified yet.",
   daily: "No records for this day.",
 };
@@ -151,8 +151,8 @@ export default function Dashboard({ profile, initialVehicles }: Props) {
     flash(
       "ok",
       entryStage === "draft"
-        ? `${created.registration_no} (${created.jumper_no}) added to the Working Queue. Send it for verification when ready.`
-        : `${created.registration_no} (${created.jumper_no}) added to the Verification Queue.`
+        ? `${created.jumper_no} added to Working. Send it for verification when ready.`
+        : `${created.jumper_no} added to Pending.`
     );
   };
 
@@ -170,7 +170,7 @@ export default function Dashboard({ profile, initialVehicles }: Props) {
     try {
       await deleteVehicle(supabase, v.id);
       setVehicles((prev) => prev.filter((p) => p.id !== v.id));
-      flash("ok", `${v.registration_no} deleted.`);
+      flash("ok", `${v.jumper_no} deleted.`);
     } catch (err) {
       await refresh();
       throw err;
@@ -198,7 +198,7 @@ export default function Dashboard({ profile, initialVehicles }: Props) {
         "ok",
         verified
           ? `Approved. Certificate ${updated.certificate_no} issued for ${updated.jumper_no}.`
-          : `${updated.jumper_no} returned to the Verification Queue.`
+          : `${updated.jumper_no} returned to Pending.`
       );
     } catch (err) {
       await refresh();
@@ -212,7 +212,7 @@ export default function Dashboard({ profile, initialVehicles }: Props) {
     setBusyId(v.id);
     try {
       upsertLocal(await sendForVerification(supabase, v.id));
-      flash("ok", `${v.jumper_no} sent to the inspector Verification Queue.`);
+      flash("ok", `${v.jumper_no} sent to Pending (inspector verification).`);
     } catch (err) {
       await refresh();
       flash("err", err instanceof Error ? err.message : "Could not send for verification");
@@ -225,7 +225,7 @@ export default function Dashboard({ profile, initialVehicles }: Props) {
     const ids = rows.filter((r) => r.status === "draft" && canSend(r, profile.id, profile.role)).map((r) => r.id);
     const moved = await moveAll(supabase, ids, "draft", "pending");
     moved.forEach(upsertLocal);
-    flash("ok", `${moved.length} entr${moved.length === 1 ? "y" : "ies"} sent to the Verification Queue.`);
+    flash("ok", `${moved.length} entr${moved.length === 1 ? "y" : "ies"} sent to Pending.`);
   };
 
   const handleApproveAll = async () => {
@@ -241,7 +241,7 @@ export default function Dashboard({ profile, initialVehicles }: Props) {
     if (res.inserted.length > 0) {
       flash(
         "ok",
-        `Imported ${res.inserted.length} record(s) into the ${entryStage === "draft" ? "Working" : "Verification"} Queue.`
+        `Imported ${res.inserted.length} record(s) into ${entryStage === "draft" ? "Working" : "Pending"}.`
       );
       setTab(entryStage);
       setActiveDate(null);
@@ -253,7 +253,7 @@ export default function Dashboard({ profile, initialVehicles }: Props) {
     try {
       const sorted = [...vehicles].sort((a, b) => a.id - b.id);
       const tab = scope === "verified" ? "passed" : scope === "pending" ? "pending" : "all";
-      // "pending" scope = everything not yet verified (working + verification queue)
+      // "pending" scope = everything not yet verified (working + pending)
       const subset = sorted.filter((v) =>
         tab === "all" ? true : tab === "passed" ? v.status === "passed" : v.status !== "passed"
       );
@@ -353,8 +353,8 @@ export default function Dashboard({ profile, initialVehicles }: Props) {
 
   const stats = [
     { label: "Total records", value: counts.total, Icon: FolderArchive, tone: "from-indigo-500 to-violet-500" },
-    { label: "Working Queue", value: counts.draft, Icon: ClipboardList, tone: "from-slate-500 to-slate-700" },
-    { label: "Verification Queue", value: counts.pending, Icon: Truck, tone: "from-amber-400 to-orange-500" },
+    { label: "Working", value: counts.draft, Icon: ClipboardList, tone: "from-slate-500 to-slate-700" },
+    { label: "Pending", value: counts.pending, Icon: Truck, tone: "from-amber-400 to-orange-500" },
     { label: "Verified", value: counts.passed, Icon: BadgeCheck, tone: "from-emerald-400 to-teal-500" },
     { label: "Added today", value: counts.today, Icon: CalendarPlus, tone: "from-sky-400 to-blue-500" },
   ];
@@ -706,7 +706,7 @@ export default function Dashboard({ profile, initialVehicles }: Props) {
             title="Delete this entry?"
             message={
               <>
-                <b>{dialog.vehicle.jumper_no}</b> ({dialog.vehicle.registration_no}) will be removed
+                <b>{dialog.vehicle.jumper_no}</b> will be removed
                 from CFX{dialog.vehicle.status === "passed" ? " and its e-certificate will no longer be valid" : ""}. A
                 copy is kept in the Admin Panel recycle bin, so it can be restored.
               </>
@@ -722,8 +722,8 @@ export default function Dashboard({ profile, initialVehicles }: Props) {
             title={`Approve all ${rows.length} records?`}
             message={
               <>
-                Every record currently listed in the <b>Verification Queue</b>
-                {search.trim() ? <> (matching your search)</> : null} will be approved and moved to the Verified Queue,
+                Every record currently listed in <b>Pending</b>
+                {search.trim() ? <> (matching your search)</> : null} will be approved and moved to Verified,
                 and a certificate number is issued for each.
               </>
             }
@@ -738,8 +738,8 @@ export default function Dashboard({ profile, initialVehicles }: Props) {
             title="Send all for verification?"
             message={
               <>
-                Every entry currently listed in the <b>Working Queue</b>
-                {search.trim() ? <> (matching your search)</> : null} moves to the inspector Verification Queue. You
+                Every entry currently listed in <b>Working</b>
+                {search.trim() ? <> (matching your search)</> : null} moves to Pending for the inspector. You
                 will no longer be able to edit them.
               </>
             }
@@ -755,8 +755,8 @@ export default function Dashboard({ profile, initialVehicles }: Props) {
             title="Unverify this record?"
             message={
               <>
-                Unverify <b>{dialog.vehicle.jumper_no}</b> ({dialog.vehicle.registration_no}). Its certificate (
-                {dialog.vehicle.certificate_no}) is withdrawn and the record returns to the Verification Queue.
+                Unverify <b>{dialog.vehicle.jumper_no}</b>. Its certificate (
+                {dialog.vehicle.certificate_no}) is withdrawn and the record returns to Pending.
               </>
             }
             confirmLabel="Unverify"
